@@ -2187,53 +2187,54 @@ def export_csv():
 # -----------------------------------------
 # START APPLICATION
 # -----------------------------------------
+init_db()
+conn = get_db()
+
+try:
+
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO users
+        (employee_id, password, full_name, role, must_change_password)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            "MGR001",
+            generate_password_hash("Manager@123"),
+            "System Manager",
+            "manager",
+            1
+        )
+    )
+
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO users
+        (employee_id, password, full_name, role, must_change_password)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            "ADMIN001",
+            generate_password_hash("Admin@123"),
+            "System Administrator",
+            "admin",
+            1
+        )
+    )
+
+    conn.commit()
+
+except Exception as e:
+    print("Error:", e)
+
+finally:
+    conn.close()
+        
 if __name__ == "__main__":
 
     init_db()
 
     print("\n✅ Employee Leave Portal Running")
     print("🌐 http://127.0.0.1:5000\n")
-
-    conn = get_db()
-
-    try:
-
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO users
-            (employee_id, password, full_name, role, must_change_password)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                "MGR001",
-                generate_password_hash("Manager@123"),
-                "System Manager",
-                "manager",
-                1
-            )
-        )
-
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO users
-            (employee_id, password, full_name, role, must_change_password)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                "ADMIN001",
-                generate_password_hash("Admin@123"),
-                "System Administrator",
-                "admin",
-                1
-            )
-        )
-
-        conn.commit()
-
-    except Exception as e:
-        print("Error:", e)
-
-    finally:
-        conn.close()
 
     app.run(host="0.0.0.0", port=5000)
