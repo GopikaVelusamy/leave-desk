@@ -1,0 +1,5 @@
+new_tf_env/
+__pycache__/
+*.pyc
+leave_portal.db
+.env
