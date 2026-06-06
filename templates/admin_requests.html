@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Manager Leave Requests</title>
+
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'DM Sans',sans-serif;
+    background:#f0f4f8;
+}
+
+nav{
+    background:linear-gradient(135deg,#1a3a5c,#2e6da4);
+    padding:18px 40px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.brand{
+    color:white;
+    font-size:1.8rem;
+    font-family:'DM Serif Display',serif;
+}
+
+.nav-links{
+    display:flex;
+    gap:12px;
+}
+
+.nav-links a{
+    text-decoration:none;
+    color:white;
+    background:rgba(255,255,255,0.15);
+    padding:10px 16px;
+    border-radius:8px;
+}
+
+.nav-links a:hover{
+    background:rgba(255,255,255,0.25);
+}
+
+.container{
+    max-width:1400px;
+    margin:30px auto;
+    padding:0 20px;
+}
+
+.card{
+    background:white;
+    border-radius:16px;
+    padding:28px;
+    margin-bottom:25px;
+    box-shadow:0 4px 15px rgba(0,0,0,0.08);
+}
+
+.card h2{
+    color:#1a3a5c;
+    margin-bottom:20px;
+}
+
+.stats-box{
+    text-align:center;
+    background:#f7f9fb;
+    padding:30px;
+    border-radius:12px;
+}
+
+.stats-box h1{
+    color:#2e6da4;
+    font-size:3rem;
+}
+
+.stats-box p{
+    margin-top:10px;
+    font-size:1.1rem;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th{
+    background:#f7f9fb;
+    padding:14px;
+    text-align:left;
+}
+
+td{
+    padding:14px;
+    border-bottom:1px solid #eee;
+    vertical-align:top;
+}
+
+textarea{
+    width:220px;
+    min-height:70px;
+    padding:10px;
+    border:1px solid #ddd;
+    border-radius:8px;
+}
+
+.btn{
+    border:none;
+    padding:10px 16px;
+    border-radius:8px;
+    color:white;
+    cursor:pointer;
+    margin-top:5px;
+}
+
+.approve{
+    background:#27ae60;
+}
+
+.reject{
+    background:#e74c3c;
+}
+
+.badge{
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:0.85rem;
+    font-weight:600;
+}
+
+.pending{
+    background:#fff4d6;
+    color:#a86b00;
+}
+
+.approved{
+    background:#d4edda;
+    color:#155724;
+}
+
+.rejected{
+    background:#f8d7da;
+    color:#721c24;
+}
+
+.flash{
+    padding:14px;
+    margin-bottom:20px;
+    border-radius:8px;
+}
+
+.flash.success{
+    background:#d4edda;
+    color:#155724;
+}
+
+.flash.error{
+    background:#f8d7da;
+    color:#721c24;
+}
+
+.footer{
+    text-align:center;
+    padding:20px;
+    color:#777;
+}
+
+</style>
+</head>
+
+<body>
+
+<nav>
+
+    <div class="brand">
+        📋 Leave Desk
+    </div>
+
+    <div class="nav-links">
+
+        <a href="{{ url_for('admin_dashboard') }}">
+            Dashboard
+        </a>
+
+        <a href="{{ url_for('add_manager') }}">
+            Add Manager
+        </a>
+
+        <a href="{{ url_for('logout') }}">
+            Logout
+        </a>
+
+    </div>
+
+</nav>
+
+<div class="container">
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category,message in messages %}
+            <div class="flash {{ category }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<!-- Pending Count -->
+
+<div class="card">
+
+    <h2>📊 Manager Approval Queue</h2>
+
+    <div class="stats-box">
+
+        <h1>
+            {{ stats.pending_manager_requests }}
+        </h1>
+
+        <p>Pending Manager Leave Requests</p>
+
+    </div>
+
+</div>
+
+<!-- Pending Requests -->
+
+<div class="card">
+
+<h2>📋 Pending Manager Leave Requests</h2>
+
+{% if pending_requests %}
+
+<table>
+
+<thead>
+
+<tr>
+    <th>ID</th>
+    <th>Manager</th>
+    <th>Employee ID</th>
+    <th>Leave Type</th>
+    <th>From</th>
+    <th>To</th>
+    <th>Days</th>
+    <th>Reason</th>
+    <th>Comment</th>
+    <th>Action</th>
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for req in pending_requests %}
+
+<tr>
+
+    <td>{{ req.id }}</td>
+    <td>{{ req.full_name }}</td>
+    <td>{{ req.employee_id }}</td>
+    <td>{{ req.leave_type }}</td>
+    <td>{{ req.start_date }}</td>
+    <td>{{ req.end_date }}</td>
+    <td>{{ req.total_days }}</td>
+    <td>{{ req.reason }}</td>
+
+    <td>
+
+        <form method="POST"
+              action="{{ url_for('admin_action', request_id=req.id) }}">
+
+            <textarea
+                name="comment"
+                placeholder="Enter admin comment"></textarea>
+
+    </td>
+
+    <td>
+
+            <button
+                type="submit"
+                name="action"
+                value="Approved"
+                class="btn approve">
+                Approve
+            </button>
+
+            <br><br>
+
+            <button
+                type="submit"
+                name="action"
+                value="Rejected"
+                class="btn reject">
+                Reject
+            </button>
+
+        </form>
+
+    </td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+{% else %}
+
+<p>No pending manager leave requests.</p>
+
+{% endif %}
+
+</div>
+
+<!-- Decision History -->
+
+<div class="card">
+
+<h2>🕒 Recent Decisions</h2>
+
+{% if decision_history %}
+
+<table>
+
+<thead>
+
+<tr>
+    <th>Manager</th>
+    <th>Leave Type</th>
+    <th>Status</th>
+    <th>Comment</th>
+    <th>Decision Date</th>
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for req in decision_history %}
+
+<tr>
+
+    <td>{{ req.full_name }}</td>
+
+    <td>{{ req.leave_type }}</td>
+
+    <td>
+
+        <span class="badge {{ req.status.lower() }}">
+            {{ req.status }}
+        </span>
+
+    </td>
+
+    <td>
+        {{ req.manager_comment if req.manager_comment else "-" }}
+    </td>
+
+    <td>
+        {{ req.decision_date }}
+    </td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+{% else %}
+
+<p>No decisions recorded yet.</p>
+
+{% endif %}
+
+</div>
+
+</div>
+
+<div class="footer">
+    © 2026 LeaveDesk. All Rights Reserved.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Dashboard</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'DM Sans',sans-serif;
+    background:#f4f7fb;
+}
+
+nav{
+    background:linear-gradient(135deg,#1a3a5c,#2e6da4);
+    color:white;
+    padding:16px 32px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.brand{
+    font-family:'DM Serif Display',serif;
+    font-size:1.4rem;
+}
+
+nav a{
+    color:white;
+    text-decoration:none;
+    background:rgba(255,255,255,0.15);
+    padding:8px 14px;
+    border-radius:6px;
+    margin-left:10px;
+}
+
+.container{
+    max-width:1200px;
+    margin:30px auto;
+    padding:0 20px;
+}
+
+.card{
+    background:white;
+    border-radius:15px;
+    padding:30px;
+    margin-bottom:25px;
+    box-shadow:0 2px 15px rgba(0,0,0,0.08);
+}
+
+.card h2{
+    color:#1a3a5c;
+    margin-bottom:15px;
+}
+
+.balance-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:20px;
+}
+
+.balance-card{
+    background:#f7f9fb;
+    border-radius:12px;
+    padding:25px;
+    text-align:center;
+}
+
+.balance-card h3{
+    font-size:2rem;
+    color:#2e6da4;
+}
+
+.stats-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:20px;
+}
+
+.stat-card{
+    background:#f7f9fb;
+    border-radius:12px;
+    padding:25px;
+    text-align:center;
+}
+
+.stat-card h3{
+    color:#1a3a5c;
+    font-size:2rem;
+}
+
+.action-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:20px;
+}
+
+.action-btn{
+    background:#2e6da4;
+    color:white;
+    text-decoration:none;
+    padding:16px;
+    border-radius:10px;
+    text-align:center;
+    font-weight:600;
+}
+
+.action-btn:hover{
+    background:#1a3a5c;
+}
+
+@media(max-width:768px){
+
+    nav{
+        flex-direction:column;
+        gap:10px;
+    }
+
+    .balance-grid,
+    .stats-grid,
+    .action-grid{
+        grid-template-columns:1fr;
+    }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<nav>
+
+
+<div class="brand">
+    📋 LeaveDesk
+</div>
+
+<div>
+
+    <a href="{{ url_for('employee_dashboard') }}">
+        Dashboard
+    </a>
+
+    <a href="{{ url_for('apply_leave') }}">
+        Apply Leave
+    </a>
+
+    <a href="{{ url_for('my_requests') }}">
+        My Requests
+    </a>
+
+    <a href="{{ url_for('profile') }}">
+        Profile
+    </a>
+
+    
+
+    <a href="{{ url_for('logout') }}">
+        Logout
+    </a>
+
+</div>
+
+
+</nav>
+
+<div class="container">
+
+
+<div class="card">
+
+    <h2>Welcome {{ session.full_name }} 👋</h2>
+
+    <p>
+        Employee ID:
+        <strong>{{ session.employee_id }}</strong>
+    </p>
+
+    <p>
+        Department:
+        <strong>
+            {{ user.department if user.department else "-" }}
+        </strong>
+    </p>
+
+</div>
+
+<div class="card">
+
+    <h2>Leave Balance</h2>
+
+    <div class="balance-grid">
+
+        <div class="balance-card">
+            <h3>{{ user.casual_leave }}</h3>
+            <p>Casual Leave</p>
+        </div>
+
+        <div class="balance-card">
+            <h3>{{ user.sick_leave }}</h3>
+            <p>Sick Leave</p>
+        </div>
+
+        <div class="balance-card">
+            <h3>{{ user.annual_leave }}</h3>
+            <p>Annual Leave</p>
+        </div>
+
+    </div>
+
+</div>
+
+<div class="card">
+
+    <h2>Leave Statistics</h2>
+
+    <div class="stats-grid">
+
+        <div class="stat-card">
+            <h3>{{ stats.total or 0 }}</h3>
+            <p>Total</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>{{ stats.pending or 0 }}</h3>
+            <p>Pending</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>{{ stats.approved or 0 }}</h3>
+            <p>Approved</p>
+        </div>
+
+        <div class="stat-card">
+            <h3>{{ stats.rejected or 0 }}</h3>
+            <p>Rejected</p>
+        </div>
+
+    </div>
+
+</div>
+
+
+
+</div>
+<footer>
+  © 2026 LeaveDesk. All Rights Reserved.
+</footer>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Leave Management Portal</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'DM Sans',sans-serif;
+    background:#f0f4f8;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.page-wrapper{
+    display:flex;
+    width:860px;
+    min-height:500px;
+    border-radius:20px;
+    overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,0.15);
+}
+
+@media(max-width:768px){
+
+    .page-wrapper{
+        flex-direction:column;
+        width:95%;
+        min-height:auto;
+    }
+
+    .left-panel,
+    .right-panel{
+        width:100%;
+    }
+
+}
+
+/* LEFT PANEL */
+
+.left-panel{
+    background:linear-gradient(145deg,#1a3a5c,#2e6da4);
+    color:white;
+    width:45%;
+    padding:50px 40px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+}
+
+.logo{
+    font-family:'DM Serif Display',serif;
+    font-size:2rem;
+    margin-bottom:12px;
+}
+
+.left-panel p{
+    font-size:0.95rem;
+    opacity:0.85;
+    line-height:1.7;
+    margin-bottom:25px;
+}
+
+.info-item{
+    margin-bottom:14px;
+    font-size:0.92rem;
+}
+
+/* RIGHT PANEL */
+
+.right-panel{
+    background:white;
+    flex:1;
+    padding:50px 40px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+}
+
+.right-panel h2{
+    font-family:'DM Serif Display',serif;
+    font-size:1.9rem;
+    color:#1a3a5c;
+    margin-bottom:10px;
+}
+
+.subtitle{
+    color:#777;
+    margin-bottom:35px;
+    line-height:1.6;
+}
+
+.btn{
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    font-size:1rem;
+    font-weight:600;
+    cursor:pointer;
+    margin-bottom:15px;
+    transition:0.2s;
+}
+
+.login-btn{
+    background:linear-gradient(135deg,#2e6da4,#1a3a5c);
+    color:white;
+}
+
+.signup-btn{
+    background:#eef4fb;
+    color:#1a3a5c;
+    border:1px solid #d6dde7;
+}
+
+.btn:hover{
+    transform:translateY(-2px);
+}
+
+a{
+    text-decoration:none;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="page-wrapper">
+
+    <div class="left-panel">
+
+        <div class="logo">📋 Leave Desk</div>
+
+        <p>
+            An intelligent leave management portal that enables employees to submit and track leave requests while providing managers with a seamless approval workflow.
+        </p>
+        
+        <div class="info-item">👥 Role-Based User Access</div>
+        <div class="info-item">📝 Easy Leave Application</div>
+        <div class="info-item">📊 Real-Time Request Tracking</div>
+        <div class="info-item">✅ Streamlined Approval Workflow</div>
+        <div class="info-item">🔐 Secure Authentication & Password Recovery</div>
+
+    </div>
+
+    <div class="right-panel">
+
+        <h2>Welcome</h2>
+
+        <p class="subtitle">
+            Smart Leave Request & Approval System
+        </p>
+
+        <a href="{{ url_for('login') }}">
+            <button class="btn login-btn">
+                Login
+            </button>
+        </a>
+
+        <a href="{{ url_for('signup') }}">
+            <button class="btn signup-btn">
+                Create Account
+            </button>
+        </a>
+
+        <div style="
+            text-align:center;
+            margin-top:20px;
+            color:#999;
+            font-size:0.8rem;
+        ">
+            © 2026 LeaveDesk. All Rights Reserved.
+        </div>
+    </div>
+
+    
+
+</div>
+
+</body>
+</html>

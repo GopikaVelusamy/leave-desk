@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apply Leave</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'DM Sans',sans-serif;
+    background:#f4f7fb;
+}
+
+nav{
+    background:linear-gradient(135deg,#1a3a5c,#2e6da4);
+    color:white;
+    padding:16px 32px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.brand{
+    font-family:'DM Serif Display',serif;
+    font-size:1.4rem;
+}
+
+nav a{
+    color:white;
+    text-decoration:none;
+    background:rgba(255,255,255,0.15);
+    padding:8px 14px;
+    border-radius:6px;
+    margin-left:10px;
+}
+
+.container{
+    max-width:800px;
+    margin:30px auto;
+    padding:0 20px;
+}
+
+.card{
+    background:white;
+    border-radius:15px;
+    padding:30px;
+    box-shadow:0 2px 15px rgba(0,0,0,0.08);
+}
+
+.card h2{
+    color:#1a3a5c;
+    margin-bottom:20px;
+}
+
+.form-group{
+    margin-bottom:20px;
+}
+
+label{
+    display:block;
+    margin-bottom:8px;
+    font-weight:600;
+}
+
+input,
+select,
+textarea{
+    width:100%;
+    padding:12px;
+    border:1px solid #d8dfe8;
+    border-radius:8px;
+}
+
+textarea{
+    min-height:100px;
+}
+
+.btn{
+    background:#2e6da4;
+    color:white;
+    border:none;
+    padding:12px 24px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.btn:hover{
+    background:#1a3a5c;
+}
+
+.flash{
+    padding:12px;
+    border-radius:8px;
+    margin-bottom:15px;
+}
+
+.flash.success{
+    background:#e8f8f0;
+    color:#1a7a4a;
+}
+
+.flash.error{
+    background:#fde8e8;
+    color:#c0392b;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<nav>
+
+<div class="brand">📋 LeaveDesk</div>
+
+<div>
+
+<a href="{{ url_for('employee_dashboard') }}">Dashboard</a> <a href="{{ url_for('my_requests') }}">My Requests</a> <a href="{{ url_for('profile') }}">Profile</a> <a href="{{ url_for('logout') }}">Logout</a>
+
+</div>
+
+</nav>
+
+<div class="container">
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category,message in messages %}
+
+<div class="flash {{ category }}">
+{{ message }}
+</div>
+{% endfor %}
+{% endwith %}
+
+<div class="card">
+
+<h2>📝 Apply Leave</h2>
+
+<form method="POST" action="/submit_leave">
+
+<div class="form-group">
+
+<label>Leave Type</label>
+
+<select name="leave_type" required>
+
+<option value="">Select Leave Type</option>
+<option value="Sick Leave">Sick Leave</option>
+<option value="Casual Leave">Casual Leave</option>
+<option value="Annual Leave">Annual Leave</option>
+<option value="Emergency Leave">Emergency Leave</option>
+<option value="Work From Home">Work From Home</option>
+
+</select>
+
+</div>
+
+<div class="form-group">
+
+<label>Start Date</label>
+
+<input
+type="date"
+name="start_date"
+min="{{ today }}"
+max="{{ max_date }}"
+required>
+
+</div>
+
+<div class="form-group">
+
+<label>End Date</label>
+
+<input
+type="date"
+name="end_date"
+min="{{ today }}"
+max="{{ max_date }}"
+required>
+
+</div>
+
+<div class="form-group">
+
+<label>Reason</label>
+
+<textarea
+name="reason"
+placeholder="Enter reason for leave"
+required></textarea>
+
+</div>
+
+<button class="btn" type="submit">
+Submit Leave Request
+</button>
+
+</form>
+
+</div>
+
+</div>
+<footer>
+    © 2026 LeaveDesk. All Rights Reserved.
+</footer>
+</body>
+</html>

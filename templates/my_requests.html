@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Leave Requests</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'DM Sans',sans-serif;
+    background:#f4f7fb;
+}
+
+nav{
+    background:linear-gradient(135deg,#1a3a5c,#2e6da4);
+    color:white;
+    padding:16px 32px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.brand{
+    font-family:'DM Serif Display',serif;
+    font-size:1.4rem;
+}
+
+nav a{
+    color:white;
+    text-decoration:none;
+    background:rgba(255,255,255,0.15);
+    padding:8px 14px;
+    border-radius:6px;
+    margin-left:10px;
+}
+
+.container{
+    max-width:1200px;
+    margin:30px auto;
+    padding:0 20px;
+}
+
+.card{
+    background:white;
+    border-radius:15px;
+    padding:30px;
+    box-shadow:0 2px 15px rgba(0,0,0,0.08);
+}
+
+.card h2{
+    color:#1a3a5c;
+    margin-bottom:20px;
+}
+
+.table-container{
+    overflow-x:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th{
+    background:#f7f9fb;
+    padding:12px;
+    text-align:left;
+}
+
+td{
+    padding:12px;
+    border-bottom:1px solid #eee;
+}
+
+.badge{
+    padding:5px 12px;
+    border-radius:20px;
+    font-size:0.8rem;
+    font-weight:600;
+}
+
+.Pending{
+    background:#fff3cd;
+    color:#856404;
+}
+
+.Approved{
+    background:#d1f2e1;
+    color:#1a7a4a;
+}
+
+.Rejected{
+    background:#fde8e8;
+    color:#c0392b;
+}
+
+.cancel-btn{
+    background:#e74c3c;
+    color:white;
+    padding:6px 12px;
+    border-radius:5px;
+    text-decoration:none;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<nav>
+
+<div class="brand">📋 LeaveDesk</div>
+
+<div>
+
+<a href="{{ url_for('employee_dashboard') }}">Dashboard</a> <a href="{{ url_for('apply_leave') }}">Apply Leave</a> <a href="{{ url_for('profile') }}">Profile</a> <a href="{{ url_for('logout') }}">Logout</a>
+
+</div>
+
+</nav>
+
+<div class="container">
+
+<div class="card">
+
+<h2>📊 My Leave Requests</h2>
+
+{% if requests %}
+
+<div class="table-container">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>ID</th>
+<th>Type</th>
+<th>From</th>
+<th>To</th>
+<th>Total Days</th>
+<th>Status</th>
+<th>Approval Level</th>
+<th>Action</th>
+<th>Manager Comment</th>
+<th>Decision Date</th>
+<th>Submitted On</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for r in requests %}
+
+<tr>
+
+<td>{{ r.id }}</td>
+<td>{{ r.leave_type }}</td>
+<td>{{ r.start_date }}</td>
+<td>{{ r.end_date }}</td>
+<td>{{ r.total_days }}</td>
+
+<td>
+<span class="badge {{ r.status }}">
+{{ r.status }}
+</span>
+</td>
+
+<td>{{ r.approval_level|title }}</td>
+
+<td>
+
+{% if r.status == 'Pending' %}
+
+<a
+href="/cancel_leave/{{ r.id }}"
+class="cancel-btn"
+onclick="return confirm('Cancel this leave request?')">
+
+Cancel
+
+</a>
+
+{% else %}
+
+{% endif %}
+
+</td>
+
+<td>
+{{ r.manager_comment if r.manager_comment else "-" }}
+</td>
+
+<td>
+{{ r.decision_date if r.decision_date else "-" }}
+</td>
+
+<td>
+{{ r.submitted_on }}
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+{% else %}
+
+<p>No leave requests found.</p>
+
+{% endif %}
+
+</div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Edit User</title>
+
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'DM Sans',sans-serif;
+    background:#eef2f7;
+}
+
+nav{
+    background:linear-gradient(135deg,#1a3a5c,#2e6da4);
+    color:white;
+    padding:16px 30px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.logo{
+    font-family:'DM Serif Display',serif;
+    font-size:1.8rem;
+}
+
+.nav-links{
+    display:flex;
+    gap:10px;
+}
+
+.nav-links a{
+    color:white;
+    text-decoration:none;
+    padding:8px 14px;
+    border-radius:8px;
+    background:rgba(255,255,255,0.15);
+}
+
+.nav-links a:hover{
+    background:rgba(255,255,255,0.25);
+}
+
+.container{
+    max-width:1000px;
+    margin:40px auto;
+    padding:0 20px;
+}
+
+.card{
+    background:white;
+    border-radius:16px;
+    padding:35px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.08);
+}
+
+.card h2{
+    color:#1a3a5c;
+    margin-bottom:25px;
+    border-bottom:2px solid #eef2f7;
+    padding-bottom:12px;
+}
+
+.flash{
+    padding:12px;
+    border-radius:8px;
+    margin-bottom:20px;
+}
+
+.flash.success{
+    background:#e8f8f0;
+    color:#1a7a4a;
+}
+
+.flash.error{
+    background:#fde8e8;
+    color:#c0392b;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+}
+
+.form-group{
+    margin-bottom:18px;
+}
+
+label{
+    display:block;
+    margin-bottom:6px;
+    font-weight:600;
+    color:#333;
+}
+
+input{
+    width:100%;
+    padding:12px;
+    border:1px solid #d9e2ec;
+    border-radius:8px;
+    font-size:0.95rem;
+}
+
+input:focus{
+    outline:none;
+    border-color:#2e6da4;
+}
+
+.readonly{
+    background:#f7f9fb;
+    color:#666;
+}
+
+.section-title{
+    margin-top:25px;
+    margin-bottom:15px;
+    color:#1a3a5c;
+    font-size:1.1rem;
+    font-weight:600;
+}
+
+.btn{
+    margin-top:20px;
+    background:linear-gradient(135deg,#2e6da4,#1a3a5c);
+    color:white;
+    border:none;
+    padding:12px 25px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:1rem;
+}
+
+.btn:hover{
+    opacity:0.9;
+}
+
+.footer{
+    text-align:center;
+    margin-top:30px;
+    color:#888;
+    font-size:0.85rem;
+}
+
+@media(max-width:768px){
+
+    nav{
+        flex-direction:column;
+        gap:10px;
+    }
+
+    .form-grid{
+        grid-template-columns:1fr;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<nav>
+
+    <div class="logo">
+        📋 Leave Desk
+    </div>
+
+    <div class="nav-links">
+
+        <a href="{{ url_for('admin_dashboard') }}">
+            Dashboard
+        </a>
+
+        <a href="{{ url_for('logout') }}">
+            Logout
+        </a>
+
+    </div>
+
+</nav>
+
+<div class="container">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category,message in messages %}
+                <div class="flash {{ category }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+
+        <h2>✏ Edit User Details</h2>
+
+        <form method="POST">
+
+            <div class="form-grid">
+
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input
+                        type="text"
+                        name="full_name"
+                        value="{{ user.full_name }}"
+                        required>
+                </div>
+
+                <div class="form-group">
+                    <label>Employee ID</label>
+                    <input
+                        type="text"
+                        value="{{ user.employee_id }}"
+                        class="readonly"
+                        readonly>
+                </div>
+
+                <div class="form-group">
+                    <label>Role</label>
+                    <input
+                        type="text"
+                        value="{{ user.role|title }}"
+                        class="readonly"
+                        readonly>
+                </div>
+
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input
+                        type="email"
+                        name="email"
+                        value="{{ user.email }}"
+                        required>
+                </div>
+
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input
+                        type="text"
+                        name="phone"
+                        value="{{ user.phone if user.phone else '' }}">
+                </div>
+
+                <div class="form-group">
+                    <label>Department</label>
+                    <input
+                        type="text"
+                        name="department"
+                        value="{{ user.department if user.department else '' }}">
+                </div>
+
+                <div class="form-group">
+                    <label>Designation</label>
+                    <input
+                        type="text"
+                        name="designation"
+                        value="{{ user.designation if user.designation else '' }}">
+                </div>
+
+            </div>
+
+            <div class="section-title">
+                Leave Balances
+            </div>
+
+            <div class="form-grid">
+
+                <div class="form-group">
+                    <label>Casual Leave</label>
+                    <input
+                        type="number"
+                        name="casual_leave"
+                        value="{{ user.casual_leave }}"
+                        min="0">
+                </div>
+
+                <div class="form-group">
+                    <label>Sick Leave</label>
+                    <input
+                        type="number"
+                        name="sick_leave"
+                        value="{{ user.sick_leave }}"
+                        min="0">
+                </div>
+
+                <div class="form-group">
+                    <label>Annual Leave</label>
+                    <input
+                        type="number"
+                        name="annual_leave"
+                        value="{{ user.annual_leave }}"
+                        min="0">
+                </div>
+
+            </div>
+
+            <button type="submit" class="btn">
+                Save Changes
+            </button>
+
+        </form>
+
+    </div>
+
+    <div class="footer">
+        Version 1.0 | LeaveDesk
+    </div>
+
+</div>
+
+</body>
+</html>
