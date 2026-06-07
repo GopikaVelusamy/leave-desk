@@ -1,24 +1,41 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response
-import sqlite3
+import psycopg2
+import psycopg2.extras
 import re
 from datetime import datetime, timedelta, date
 from werkzeug.security import generate_password_hash, check_password_hash
 import secrets
-app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)
+import os
 
-DB_PATH = "leave_portal.db"
+app = Flask(__name__)
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    secrets.token_hex(32)
+)
+
+# -----------------------------------------
+# DATABASE CONNECTION STRING
+# Set your PostgreSQL URL in environment variable DATABASE_URL
+# Format: postgresql://username:password@host:port/dbname
+# On Render: set DATABASE_URL in your environment variables
+# -----------------------------------------
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/leave_portal")
+
+# Render sometimes gives 'postgres://' URLs — psycopg2 needs 'postgresql://'
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 
 # -----------------------------------------
 # DATABASE SETUP
 # -----------------------------------------
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             employee_id TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             full_name TEXT NOT NULL,
@@ -27,7 +44,6 @@ def init_db():
             department TEXT DEFAULT '',
             designation TEXT DEFAULT '',
             role TEXT NOT NULL,
-
             casual_leave INTEGER DEFAULT 6,
             sick_leave INTEGER DEFAULT 6,
             annual_leave INTEGER DEFAULT 12,
@@ -38,7 +54,7 @@ def init_db():
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS leave_requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             employee_id INTEGER NOT NULL,
             leave_type TEXT NOT NULL,
             start_date TEXT NOT NULL,
@@ -63,8 +79,7 @@ def init_db():
 # DATABASE CONNECTION
 # -----------------------------------------
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     return conn
 
 
@@ -148,13 +163,14 @@ def signup():
         hashed_password = generate_password_hash(password)
 
         conn = get_db()
+        c = conn.cursor()
 
         try:
-            conn.execute(
+            c.execute(
                 """
                 INSERT INTO users
                 (employee_id, password, full_name, email, role)
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s)
                 """,
                 (employee_id, hashed_password, full_name, email, role)
             )
@@ -165,7 +181,8 @@ def signup():
 
             return redirect(url_for("login"))
 
-        except sqlite3.IntegrityError:
+        except psycopg2.IntegrityError:
+            conn.rollback()
             flash("Employee ID already exists!", "error")
 
         finally:
@@ -182,20 +199,21 @@ def login():
 
     if request.method == "POST":
 
-        employee_id=(request.form["employee_id"].strip().upper())
+        employee_id = (request.form["employee_id"].strip().upper())
         password = request.form["password"]
-        
 
         conn = get_db()
+        c = conn.cursor()
 
-        user = conn.execute(
+        c.execute(
             """
             SELECT * FROM users
-            WHERE employee_id=?
+            WHERE employee_id=%s
             """,
             (employee_id,)
-        ).fetchone()
-        
+        )
+        user = c.fetchone()
+
         if user and user["is_active"] == 0:
             conn.close()
             flash(
@@ -243,17 +261,19 @@ def profile():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    user = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM users
-        WHERE id=?
+        WHERE id=%s
         """,
         (session["user_id"],)
-    ).fetchone()
+    )
+    user = c.fetchone()
 
-    stats = conn.execute(
+    c.execute(
         """
         SELECT
             COUNT(*) as total,
@@ -261,10 +281,11 @@ def profile():
             SUM(CASE WHEN status='Rejected' THEN 1 ELSE 0 END) as rejected,
             SUM(CASE WHEN status='Pending' THEN 1 ELSE 0 END) as pending
         FROM leave_requests
-        WHERE employee_id=?
+        WHERE employee_id=%s
         """,
         (session["user_id"],)
-    ).fetchone()
+    )
+    stats = c.fetchone()
 
     conn.close()
 
@@ -273,8 +294,8 @@ def profile():
         user=user,
         stats=stats
     )
-    
-    
+
+
 # -----------------------------------------
 # EDIT PROFILE
 # -----------------------------------------
@@ -288,10 +309,10 @@ def edit_profile():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
     if request.method == "POST":
 
-        
         email = request.form["email"].strip()
         phone = request.form["phone"].strip()
 
@@ -348,47 +369,43 @@ def edit_profile():
         # -----------------------------------------
         # UPDATE PROFILE
         # -----------------------------------------
-        conn.execute(
+        c.execute(
             """
             UPDATE users
             SET
-                
-                email=?,
-                phone=?
-                
-            WHERE id=?
+                email=%s,
+                phone=%s
+            WHERE id=%s
             """,
             (
-                
                 email,
                 phone,
-                
                 session["user_id"]
             )
         )
 
         conn.commit()
 
-        # Update session name immediately
-        
-
         flash(
             "Profile updated successfully.",
             "success"
         )
 
+        conn.close()
+
         return redirect(
             url_for("edit_profile")
         )
 
-    user = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM users
-        WHERE id=?
+        WHERE id=%s
         """,
         (session["user_id"],)
-    ).fetchone()
+    )
+    user = c.fetchone()
 
     conn.close()
 
@@ -396,6 +413,8 @@ def edit_profile():
         "edit_profile.html",
         user=user
     )
+
+
 # -----------------------------------------
 # CHANGE PASSWORD
 # -----------------------------------------
@@ -404,7 +423,7 @@ def change_password():
 
     if "user_id" not in session:
         return redirect(url_for("login"))
-    
+
     if session["role"] not in [
         "employee",
         "manager",
@@ -419,15 +438,17 @@ def change_password():
         confirm_password = request.form["confirm_password"]
 
         conn = get_db()
+        c = conn.cursor()
 
-        user = conn.execute(
+        c.execute(
             """
             SELECT *
             FROM users
-            WHERE id=?
+            WHERE id=%s
             """,
             (session["user_id"],)
-        ).fetchone()
+        )
+        user = c.fetchone()
 
         if not check_password_hash(
             user["password"],
@@ -526,12 +547,12 @@ def change_password():
                 url_for("change_password")
             )
 
-        conn.execute(
+        c.execute(
             """
             UPDATE users
-            SET password=?,
+            SET password=%s,
                 must_change_password=0
-            WHERE id=?
+            WHERE id=%s
             """,
             (
                 generate_password_hash(
@@ -555,8 +576,9 @@ def change_password():
 
     return render_template(
         "change_password.html"
-    )   
-    
+    )
+
+
 # -----------------------------------------
 # FORGOT PASSWORD
 # -----------------------------------------
@@ -569,7 +591,8 @@ def forgot_password():
     return render_template(
         "forgot_password.html"
     )
-    
+
+
 @app.route("/reset_user_password/<int:user_id>")
 def reset_user_password(user_id):
 
@@ -580,16 +603,17 @@ def reset_user_password(user_id):
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
     temp_password = "Temp@123"
 
-    conn.execute(
+    c.execute(
         """
         UPDATE users
         SET
-            password=?,
+            password=%s,
             must_change_password=1
-        WHERE id=?
+        WHERE id=%s
         """,
         (
             generate_password_hash(
@@ -609,7 +633,9 @@ def reset_user_password(user_id):
 
     return redirect(
         url_for("admin_dashboard")
-    ) 
+    )
+
+
 # -----------------------------------------
 # LOGOUT
 # -----------------------------------------
@@ -632,17 +658,19 @@ def employee_dashboard():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    user = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM users
-        WHERE id=?
+        WHERE id=%s
         """,
         (session["user_id"],)
-    ).fetchone()
+    )
+    user = c.fetchone()
 
-    stats = conn.execute(
+    c.execute(
         """
         SELECT
             COUNT(*) AS total,
@@ -650,10 +678,11 @@ def employee_dashboard():
             SUM(CASE WHEN status='Approved' THEN 1 ELSE 0 END) AS approved,
             SUM(CASE WHEN status='Rejected' THEN 1 ELSE 0 END) AS rejected
         FROM leave_requests
-        WHERE employee_id=?
+        WHERE employee_id=%s
         """,
         (session["user_id"],)
-    ).fetchone()
+    )
+    stats = c.fetchone()
 
     conn.close()
 
@@ -662,7 +691,8 @@ def employee_dashboard():
         user=user,
         stats=stats
     )
-    
+
+
 @app.route("/apply_leave")
 def apply_leave():
 
@@ -682,7 +712,8 @@ def apply_leave():
         today=today,
         max_date=max_date
     )
-    
+
+
 @app.route("/my_requests")
 def my_requests():
 
@@ -690,16 +721,18 @@ def my_requests():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    requests = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM leave_requests
-        WHERE employee_id=?
+        WHERE employee_id=%s
         ORDER BY submitted_on DESC
         """,
         (session["user_id"],)
-    ).fetchall()
+    )
+    requests = c.fetchall()
 
     conn.close()
 
@@ -707,8 +740,8 @@ def my_requests():
         "my_requests.html",
         requests=requests
     )
-    
-    
+
+
 # -----------------------------------------
 # LEAVE STATISTICS
 # -----------------------------------------
@@ -719,8 +752,9 @@ def leave_statistics():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    stats = conn.execute(
+    c.execute(
         """
         SELECT
 
@@ -752,10 +786,11 @@ def leave_statistics():
 
         FROM leave_requests
 
-        WHERE employee_id=?
+        WHERE employee_id=%s
         """,
         (session["user_id"],)
-    ).fetchone()
+    )
+    stats = c.fetchone()
 
     conn.close()
 
@@ -763,7 +798,8 @@ def leave_statistics():
         "leave_statistics.html",
         stats=stats
     )
-    
+
+
 # -----------------------------------------
 # SUBMIT LEAVE
 # -----------------------------------------
@@ -787,10 +823,6 @@ def submit_leave():
     end_date = request.form["end_date"]
     reason = request.form["reason"]
 
-    # -----------------------------------------
-    # DATE CONVERSION
-    # -----------------------------------------
-
     today = date.today()
 
     start_date_obj = datetime.strptime(
@@ -802,10 +834,6 @@ def submit_leave():
         end_date,
         "%Y-%m-%d"
     ).date()
-
-    # -----------------------------------------
-    # DATE VALIDATIONS
-    # -----------------------------------------
 
     if start_date_obj < today:
 
@@ -828,8 +856,6 @@ def submit_leave():
         return redirect(
             url_for("apply_leave")
         )
-
-    # Allow only 6 months in advance
 
     max_future = today + timedelta(days=180)
 
@@ -886,19 +912,17 @@ def submit_leave():
     )
 
     conn = get_db()
+    c = conn.cursor()
 
-    user = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM users
-        WHERE id=?
+        WHERE id=%s
         """,
         (session["user_id"],)
-    ).fetchone()
-
-    # -----------------------------------------
-    # CHECK LEAVE BALANCE
-    # -----------------------------------------
+    )
+    user = c.fetchone()
 
     if leave_type == "Casual Leave":
         available_leave = user["casual_leave"]
@@ -927,18 +951,14 @@ def submit_leave():
                 url_for("apply_leave")
             )
 
-    # -----------------------------------------
-    # PREVENT OVERLAPPING LEAVES
-    # -----------------------------------------
-
-    existing = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM leave_requests
-        WHERE employee_id=?
+        WHERE employee_id=%s
         AND (
-            start_date <= ?
-            AND end_date >= ?
+            start_date <= %s
+            AND end_date >= %s
         )
         """,
         (
@@ -946,7 +966,8 @@ def submit_leave():
             end_date,
             start_date
         )
-    ).fetchone()
+    )
+    existing = c.fetchone()
 
     if existing:
 
@@ -961,21 +982,13 @@ def submit_leave():
             url_for("apply_leave")
         )
 
-    # -----------------------------------------
-    # APPROVAL LEVEL
-    # -----------------------------------------
-
     approval_level = (
         "admin"
         if session["role"] == "manager"
         else "manager"
     )
 
-    # -----------------------------------------
-    # INSERT REQUEST
-    # -----------------------------------------
-
-    conn.execute(
+    c.execute(
         """
         INSERT INTO leave_requests
         (
@@ -988,7 +1001,7 @@ def submit_leave():
             submitted_on,
             approval_level
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             session["user_id"],
@@ -1013,6 +1026,8 @@ def submit_leave():
     return redirect(
         url_for(dashboard_route)
     )
+
+
 # -----------------------------------------
 # CANCEL LEAVE
 # -----------------------------------------
@@ -1032,19 +1047,21 @@ def cancel_leave(request_id):
     )
 
     conn = get_db()
+    c = conn.cursor()
 
-    leave = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM leave_requests
-        WHERE id=?
-        AND employee_id=?
+        WHERE id=%s
+        AND employee_id=%s
         """,
         (
             request_id,
             session["user_id"]
         )
-    ).fetchone()
+    )
+    leave = c.fetchone()
 
     if not leave:
 
@@ -1072,10 +1089,10 @@ def cancel_leave(request_id):
             url_for(dashboard_route)
         )
 
-    conn.execute(
+    c.execute(
         """
         DELETE FROM leave_requests
-        WHERE id=?
+        WHERE id=%s
         """,
         (request_id,)
     )
@@ -1091,9 +1108,8 @@ def cancel_leave(request_id):
     return redirect(
         url_for(dashboard_route)
     )
-# -----------------------------------------
-# MANAGER DASHBOARD
-# -----------------------------------------
+
+
 # -----------------------------------------
 # MANAGER DASHBOARD
 # -----------------------------------------
@@ -1107,17 +1123,19 @@ def manager_dashboard():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    user = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM users
-        WHERE id=?
+        WHERE id=%s
         """,
         (session["user_id"],)
-    ).fetchone()
+    )
+    user = c.fetchone()
 
-    stats = conn.execute(
+    c.execute(
         """
         SELECT
 
@@ -1150,17 +1168,19 @@ def manager_dashboard():
 
         FROM leave_requests
         """
-    ).fetchone()
+    )
+    stats = c.fetchone()
 
-    total_employees = conn.execute(
+    c.execute(
         """
         SELECT COUNT(*)
         FROM users
         WHERE role='employee'
         """
-    ).fetchone()[0]
+    )
+    total_employees = c.fetchone()["count"]
 
-    recent_requests = conn.execute(
+    c.execute(
         """
         SELECT
             lr.leave_type,
@@ -1180,7 +1200,8 @@ def manager_dashboard():
 
         LIMIT 5
         """
-    ).fetchall()
+    )
+    recent_requests = c.fetchall()
 
     conn.close()
 
@@ -1191,6 +1212,7 @@ def manager_dashboard():
         total_employees=total_employees,
         recent_requests=recent_requests
     )
+
 
 # -----------------------------------------
 # EMPLOYEE LEAVE REQUESTS
@@ -1205,12 +1227,13 @@ def manager_requests():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
     search = request.args.get("search", "").strip()
 
     if search:
 
-        all_requests = conn.execute(
+        c.execute(
             """
             SELECT
                 lr.*,
@@ -1227,8 +1250,8 @@ def manager_requests():
 
             WHERE
             (
-                u.employee_id LIKE ?
-                OR u.full_name LIKE ?
+                u.employee_id ILIKE %s
+                OR u.full_name ILIKE %s
             )
             AND u.role='employee'
             AND lr.approval_level='manager'
@@ -1244,11 +1267,11 @@ def manager_requests():
                 f"%{search}%",
                 f"%{search}%"
             )
-        ).fetchall()
+        )
 
     else:
 
-        all_requests = conn.execute(
+        c.execute(
             """
             SELECT
                 lr.*,
@@ -1274,9 +1297,11 @@ def manager_requests():
                 END,
                 lr.submitted_on DESC
             """
-        ).fetchall()
+        )
 
-    stats = conn.execute(
+    all_requests = c.fetchall()
+
+    c.execute(
         """
         SELECT
             (SELECT COUNT(*) FROM users WHERE role='employee') AS total_employees,
@@ -1296,7 +1321,8 @@ def manager_requests():
              WHERE status='Rejected'
              AND approval_level='manager') AS rejected
         """
-    ).fetchone()
+    )
+    stats = c.fetchone()
 
     conn.close()
 
@@ -1304,8 +1330,10 @@ def manager_requests():
         "manager_requests.html",
         all_requests=all_requests,
         stats=stats
-    )  
- # -----------------------------------------
+    )
+
+
+# -----------------------------------------
 # MANAGER LEAVE DASHBOARD
 # -----------------------------------------
 @app.route("/manager_leave")
@@ -1318,25 +1346,28 @@ def manager_leave():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    user = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM users
-        WHERE id=?
+        WHERE id=%s
         """,
         (session["user_id"],)
-    ).fetchone()
+    )
+    user = c.fetchone()
 
-    requests = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM leave_requests
-        WHERE employee_id=?
+        WHERE employee_id=%s
         ORDER BY submitted_on DESC
         """,
         (session["user_id"],)
-    ).fetchall()
+    )
+    requests = c.fetchall()
 
     conn.close()
     today = date.today()
@@ -1346,7 +1377,7 @@ def manager_leave():
     ).strftime("%Y-%m-%d")
 
     today = today.strftime("%Y-%m-%d")
-    
+
     return render_template(
         "manager_leave.html",
         requests=requests,
@@ -1354,7 +1385,8 @@ def manager_leave():
         today=today,
         max_date=max_date
     )
-       
+
+
 # -----------------------------------------
 # ADMIN DASHBOARD
 # -----------------------------------------
@@ -1368,19 +1400,19 @@ def admin_dashboard():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    # Logged-in admin details
-    admin = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM users
-        WHERE id = ?
+        WHERE id = %s
         """,
         (session["user_id"],)
-    ).fetchone()
+    )
+    admin = c.fetchone()
 
-    # User list
-    users = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM users
@@ -1392,10 +1424,10 @@ def admin_dashboard():
             END,
             full_name
         """
-    ).fetchall()
+    )
+    users = c.fetchall()
 
-    # Dashboard statistics
-    stats = conn.execute(
+    c.execute(
         """
         SELECT
 
@@ -1446,9 +1478,10 @@ def admin_dashboard():
              AS manager_rejected
 
         """
-    ).fetchone()
+    )
+    stats = c.fetchone()
 
-    recent_manager_requests = conn.execute(
+    c.execute(
         """
         SELECT
             lr.id,
@@ -1469,7 +1502,8 @@ def admin_dashboard():
 
         LIMIT 5
         """
-    ).fetchall()
+    )
+    recent_manager_requests = c.fetchall()
     conn.close()
 
     return render_template(
@@ -1479,6 +1513,8 @@ def admin_dashboard():
         stats=stats,
         recent_manager_requests=recent_manager_requests
     )
+
+
 @app.route(
     "/add_manager",
     methods=["GET", "POST"]
@@ -1494,10 +1530,11 @@ def add_manager():
     if request.method == "POST":
 
         conn = get_db()
+        c = conn.cursor()
 
         try:
 
-            conn.execute(
+            c.execute(
                 """
                 INSERT INTO users
                 (
@@ -1510,7 +1547,7 @@ def add_manager():
                     role,
                     must_change_password
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     request.form["employee_id"]
@@ -1543,8 +1580,8 @@ def add_manager():
                 url_for("admin_dashboard")
             )
 
-        except sqlite3.IntegrityError:
-
+        except psycopg2.IntegrityError:
+            conn.rollback()
             flash(
                 "Employee ID already exists.",
                 "error"
@@ -1561,7 +1598,8 @@ def add_manager():
     return render_template(
         "add_manager.html"
     )
-    
+
+
 # -----------------------------------------
 # ADMIN - EDIT EMPLOYEE DETAILS
 # -----------------------------------------
@@ -1575,15 +1613,17 @@ def edit_employee(user_id):
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    user = conn.execute(
+    c.execute(
         """
         SELECT *
         FROM users
-        WHERE id=?
+        WHERE id=%s
         """,
         (user_id,)
-    ).fetchone()
+    )
+    user = c.fetchone()
 
     if not user:
         conn.close()
@@ -1607,19 +1647,19 @@ def edit_employee(user_id):
         sick_leave = request.form["sick_leave"]
         annual_leave = request.form["annual_leave"]
 
-        conn.execute(
+        c.execute(
             """
             UPDATE users
             SET
-                full_name=?,
-                email=?,
-                phone=?,
-                department=?,
-                designation=?,
-                casual_leave=?,
-                sick_leave=?,
-                annual_leave=?
-            WHERE id=?
+                full_name=%s,
+                email=%s,
+                phone=%s,
+                department=%s,
+                designation=%s,
+                casual_leave=%s,
+                sick_leave=%s,
+                annual_leave=%s
+            WHERE id=%s
             """,
             (
                 full_name,
@@ -1647,7 +1687,9 @@ def edit_employee(user_id):
         "admin_edit_user.html",
         user=user,
         admin_edit=True
-    ) 
+    )
+
+
 # -----------------------------------------
 # ADMIN - MANAGER LEAVE REQUESTS
 # -----------------------------------------
@@ -1661,9 +1703,9 @@ def admin_requests():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    # Pending manager requests
-    pending_requests = conn.execute("""
+    c.execute("""
         SELECT
             lr.*,
             u.full_name,
@@ -1679,10 +1721,10 @@ def admin_requests():
             AND lr.status='Pending'
 
         ORDER BY lr.submitted_on DESC
-    """).fetchall()
+    """)
+    pending_requests = c.fetchall()
 
-    # Recently approved/rejected manager requests
-    decision_history = conn.execute("""
+    c.execute("""
         SELECT
             lr.*,
             u.full_name,
@@ -1699,16 +1741,18 @@ def admin_requests():
 
         ORDER BY lr.decision_date DESC
         LIMIT 10
-    """).fetchall()
+    """)
+    decision_history = c.fetchall()
 
-    stats = conn.execute("""
+    c.execute("""
         SELECT
             COUNT(*) AS pending_manager_requests
         FROM leave_requests
         WHERE
             approval_level='admin'
             AND status='Pending'
-    """).fetchone()
+    """)
+    stats = c.fetchone()
 
     conn.close()
 
@@ -1717,7 +1761,9 @@ def admin_requests():
         pending_requests=pending_requests,
         decision_history=decision_history,
         stats=stats
-    )     
+    )
+
+
 # -----------------------------------------
 # TOGGLE USER STATUS
 # -----------------------------------------
@@ -1729,7 +1775,7 @@ def toggle_user(user_id):
 
     if session["role"] != "admin":
         return redirect(url_for("login"))
-    
+
     if user_id == session["user_id"]:
 
         flash(
@@ -1742,25 +1788,27 @@ def toggle_user(user_id):
         )
 
     conn = get_db()
+    c = conn.cursor()
 
-    user = conn.execute(
+    c.execute(
         """
         SELECT is_active
         FROM users
-        WHERE id=?
+        WHERE id=%s
         """,
         (user_id,)
-    ).fetchone()
+    )
+    user = c.fetchone()
 
     if user:
 
         new_status = 0 if user["is_active"] else 1
 
-        conn.execute(
+        c.execute(
             """
             UPDATE users
-            SET is_active=?
-            WHERE id=?
+            SET is_active=%s
+            WHERE id=%s
             """,
             (new_status, user_id)
         )
@@ -1777,8 +1825,8 @@ def toggle_user(user_id):
     return redirect(
         url_for("admin_dashboard")
     )
-    
-    
+
+
 # -----------------------------------------
 # APPROVE / REJECT LEAVE
 # -----------------------------------------
@@ -1790,7 +1838,7 @@ def take_action(request_id):
 
     if session["role"] != "manager":
         return redirect(url_for("login"))
-    
+
     if request.form["action"] not in [
         "Approved",
         "Rejected"
@@ -1807,19 +1855,17 @@ def take_action(request_id):
     comment = request.form.get("comment", "")
 
     conn = get_db()
+    c = conn.cursor()
 
-    # -----------------------------------------
-    # PREVENT DOUBLE PROCESSING
-    # -----------------------------------------
-
-    current = conn.execute(
+    c.execute(
         """
         SELECT status, approval_level
         FROM leave_requests
-        WHERE id=?
+        WHERE id=%s
         """,
         (request_id,)
-    ).fetchone()
+    )
+    current = c.fetchone()
 
     if not current:
 
@@ -1833,7 +1879,7 @@ def take_action(request_id):
         return redirect(
             url_for("manager_requests")
         )
-        
+
     if current["approval_level"] != "manager":
 
         flash(
@@ -1864,25 +1910,20 @@ def take_action(request_id):
         "%Y-%m-%d %H:%M"
     )
 
-    
-
-    # -----------------------------------------
-    # DEDUCT LEAVE IF APPROVED
-    # -----------------------------------------
-
     if action == "Approved":
 
-        leave = conn.execute(
+        c.execute(
             """
             SELECT
                 employee_id,
                 leave_type,
                 total_days
             FROM leave_requests
-            WHERE id=?
+            WHERE id=%s
             """,
             (request_id,)
-        ).fetchone()
+        )
+        leave = c.fetchone()
 
         if leave:
 
@@ -1898,14 +1939,15 @@ def take_action(request_id):
                     leave["leave_type"]
                 ]
 
-                employee = conn.execute(
+                c.execute(
                     """
                     SELECT *
                     FROM users
-                    WHERE id=?
+                    WHERE id=%s
                     """,
                     (leave["employee_id"],)
-                ).fetchone()
+                )
+                employee = c.fetchone()
 
                 if employee[column] < leave["total_days"]:
 
@@ -1920,30 +1962,26 @@ def take_action(request_id):
                         url_for("manager_requests")
                     )
 
-                conn.execute(
+                c.execute(
                     f"""
                     UPDATE users
-                    SET {column} =
-                        {column} - ?
-                    WHERE id=?
+                    SET {column} = {column} - %s
+                    WHERE id=%s
                     """,
                     (
                         leave["total_days"],
                         leave["employee_id"]
                     )
                 )
-        # -----------------------------------------
-    # UPDATE REQUEST STATUS
-    # -----------------------------------------
 
-    conn.execute(
+    c.execute(
         """
         UPDATE leave_requests
-        SET status=?,
-            manager_comment=?,
-            decision_date=?,
-            approved_by=?
-        WHERE id=?
+        SET status=%s,
+            manager_comment=%s,
+            decision_date=%s,
+            approved_by=%s
+        WHERE id=%s
         """,
         (
             action,
@@ -1965,7 +2003,8 @@ def take_action(request_id):
     return redirect(
         url_for("manager_requests")
     )
-    
+
+
 # -----------------------------------------
 # ADMIN APPROVE / REJECT MANAGER LEAVE
 # -----------------------------------------
@@ -1980,7 +2019,7 @@ def admin_action(request_id):
 
     if session["role"] != "admin":
         return redirect(url_for("login"))
-    
+
     if request.form["action"] not in [
         "Approved",
         "Rejected"
@@ -1993,20 +2032,21 @@ def admin_action(request_id):
             url_for("manager_requests")
         )
 
-
     action = request.form["action"]
     comment = request.form.get("comment", "")
 
     conn = get_db()
+    c = conn.cursor()
 
-    current = conn.execute(
+    c.execute(
         """
         SELECT status, approval_level
         FROM leave_requests
-        WHERE id=?
+        WHERE id=%s
         """,
         (request_id,)
-    ).fetchone()
+    )
+    current = c.fetchone()
 
     if not current:
 
@@ -2020,7 +2060,7 @@ def admin_action(request_id):
         return redirect(
             url_for("admin_requests")
         )
-        
+
     if current["approval_level"] != "admin":
 
         flash(
@@ -2051,15 +2091,15 @@ def admin_action(request_id):
         "%Y-%m-%d %H:%M"
     )
 
-    conn.execute(
+    c.execute(
         """
         UPDATE leave_requests
         SET
-            status=?,
-            manager_comment=?,
-            decision_date=?,
-            approved_by=?
-        WHERE id=?
+            status=%s,
+            manager_comment=%s,
+            decision_date=%s,
+            approved_by=%s
+        WHERE id=%s
         """,
         (
             action,
@@ -2070,20 +2110,20 @@ def admin_action(request_id):
         )
     )
 
-    # Deduct leave balance if approved
     if action == "Approved":
 
-        leave = conn.execute(
+        c.execute(
             """
             SELECT
                 employee_id,
                 leave_type,
                 total_days
             FROM leave_requests
-            WHERE id=?
+            WHERE id=%s
             """,
             (request_id,)
-        ).fetchone()
+        )
+        leave = c.fetchone()
 
         leave_map = {
             "Casual Leave": "casual_leave",
@@ -2097,16 +2137,16 @@ def admin_action(request_id):
                 leave["leave_type"]
             ]
 
-            conn.execute(
+            c.execute(
                 f"""
                 UPDATE users
                 SET {column} =
                     CASE
-                        WHEN {column} - ? < 0
+                        WHEN {column} - %s < 0
                         THEN 0
-                        ELSE {column} - ?
+                        ELSE {column} - %s
                     END
-                WHERE id=?
+                WHERE id=%s
                 """,
                 (
                     leave["total_days"],
@@ -2126,7 +2166,8 @@ def admin_action(request_id):
     return redirect(
         url_for("admin_requests")
     )
-    
+
+
 # -----------------------------------------
 # EXPORT CSV REPORT
 # -----------------------------------------
@@ -2140,8 +2181,9 @@ def export_csv():
         return redirect(url_for("login"))
 
     conn = get_db()
+    c = conn.cursor()
 
-    data = conn.execute("""
+    c.execute("""
         SELECT
             u.full_name,
             u.employee_id,
@@ -2156,7 +2198,8 @@ def export_csv():
         JOIN users u
         ON lr.employee_id = u.id
         WHERE u.role='employee'
-    """).fetchall()
+    """)
+    data = c.fetchall()
 
     conn.close()
 
@@ -2183,20 +2226,23 @@ def export_csv():
             "attachment; filename=leave_report.csv"
         }
     )
-    
+
+
 # -----------------------------------------
 # START APPLICATION
 # -----------------------------------------
 init_db()
 conn = get_db()
+c = conn.cursor()
 
 try:
 
-    conn.execute(
+    c.execute(
         """
-        INSERT OR IGNORE INTO users
+        INSERT INTO users
         (employee_id, password, full_name, role, must_change_password)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (employee_id) DO NOTHING
         """,
         (
             "MGR001",
@@ -2207,11 +2253,12 @@ try:
         )
     )
 
-    conn.execute(
+    c.execute(
         """
-        INSERT OR IGNORE INTO users
+        INSERT INTO users
         (employee_id, password, full_name, role, must_change_password)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (employee_id) DO NOTHING
         """,
         (
             "ADMIN001",
@@ -2226,13 +2273,15 @@ try:
 
 except Exception as e:
     print("Error:", e)
+    conn.rollback()
 
 finally:
     conn.close()
-        
+
+
 if __name__ == "__main__":
 
     print("\n✅ Employee Leave Portal Running")
     print("🌐 http://127.0.0.1:5000\n")
 
-    app.run(host="0.0.0.0", port=5000) 
+    app.run(host="0.0.0.0", port=5000)
