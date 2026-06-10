@@ -307,7 +307,18 @@ footer{
         <a href="{{ url_for('change_password') }}">
             Change Password
         </a>
-
+        <div style="position:relative; display:inline-block;">
+            <button onclick="toggleNotifications()" id="bell-btn" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:1.1rem;margin-left:10px;position:relative;">
+                🔔
+                <span id="notif-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#e74c3c;color:white;border-radius:50%;font-size:0.65rem;width:18px;height:18px;line-height:18px;text-align:center;">0</span>
+            </button>
+            <div id="notif-panel" style="display:none;position:absolute;right:0;top:45px;width:320px;background:white;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.15);z-index:9999;overflow:hidden;">
+                <div style="padding:14px 18px;background:#1a3a5c;color:white;font-weight:600;font-size:0.9rem;">🔔 Notifications</div>
+                <div id="notif-list" style="max-height:300px;overflow-y:auto;">
+                <div style="padding:20px;text-align:center;color:#999;font-size:0.9rem;">Loading...</div>
+                    </div>
+            </div>
+        </div>
         <a href="{{ url_for('logout') }}">
             Logout
         </a>
@@ -583,6 +594,50 @@ footer{
 <footer>
     © 2026 LeaveDesk. All Rights Reserved.
 </footer>
-
+<script>
+let notifOpen = false;
+async function fetchNotifications() {
+  try {
+    const res = await fetch("/get_notifications");
+    const data = await res.json();
+    const badge = document.getElementById("notif-badge");
+    const list = document.getElementById("notif-list");
+    if (data.length === 0) {
+      badge.style.display = "none";
+      list.innerHTML = '<div style="padding:20px;text-align:center;color:#999;font-size:0.9rem;">No new notifications 🎉</div>';
+    } else {
+      badge.style.display = "inline-block";
+      badge.textContent = data.length > 9 ? "9+" : data.length;
+      list.innerHTML = data.map(n => `
+        <div style="padding:12px 18px;border-bottom:1px solid #f0f0f0;">
+          <div style="font-weight:600;color:${n.type==='success'?'#1a7a4a':n.type==='error'?'#c0392b':'#1a3a5c'};font-size:0.85rem;margin-bottom:3px;">${n.title}</div>
+          <div style="color:#555;font-size:0.82rem;line-height:1.4;">${n.message}</div>
+        </div>`).join('');
+    }
+  } catch(e) { console.log(e); }
+}
+async function toggleNotifications() {
+  const panel = document.getElementById("notif-panel");
+  notifOpen = !notifOpen;
+  panel.style.display = notifOpen ? "block" : "none";
+  if (notifOpen) {
+    await fetchNotifications();
+    setTimeout(async () => {
+      await fetch("/mark_notifications_read", { method: "POST" });
+      document.getElementById("notif-badge").style.display = "none";
+    }, 2000);
+  }
+}
+document.addEventListener("click", function(e) {
+  const panel = document.getElementById("notif-panel");
+  const btn = document.getElementById("bell-btn");
+  if (panel && btn && !panel.contains(e.target) && !btn.contains(e.target)) {
+    panel.style.display = "none";
+    notifOpen = false;
+  }
+});
+fetchNotifications();
+setInterval(fetchNotifications, 60000);
+</script>
 </body>
 </html>
