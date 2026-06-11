@@ -535,7 +535,7 @@ def my_requests():
     try:
         docs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
         requests = [to_dict_with_id(d) for d in docs]
-        requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         return render_template("my_requests.html", requests=requests)
     except Exception as e:
         print(f"My requests load error: {e}")
@@ -797,7 +797,7 @@ def manager_dashboard():
                 all_manager_requests.append(d)
 
         # Sort and take 5
-        all_manager_requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        all_manager_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         recent_requests = all_manager_requests[:5]
 
         total_employees = sum(1 for u in users_dict.values() if u.get("role") == "employee")
@@ -880,7 +880,7 @@ def manager_requests():
 
         # Sort: pending first, then submitted_on desc
         # Using stable sort:
-        all_requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        all_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         all_requests.sort(key=lambda x: 0 if x.get("status") == "Pending" else 1)
 
         total_employees = sum(1 for u in users_dict.values() if u.get("role") == "employee")
@@ -923,7 +923,7 @@ def manager_leave():
 
         docs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
         requests = [to_dict_with_id(d) for d in docs]
-        requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
 
         today = date.today()
         max_date = (today + timedelta(days=180)).strftime("%Y-%m-%d")
@@ -964,7 +964,7 @@ def admin_dashboard():
         users = [to_dict_with_id(u) for u in users_docs]
 
         role_order = {"admin": 1, "manager": 2, "employee": 3}
-        users.sort(key=lambda x: (role_order.get(x.get("role", "employee"), 3), x.get("full_name", "").lower()))
+        users.sort(key=lambda x: (role_order.get(x.get("role") or "employee", 3), (x.get("full_name") or "").lower()))
 
         total_employees = sum(1 for u in users if u.get("role") == "employee")
         total_managers = sum(1 for u in users if u.get("role") == "manager")
@@ -1001,7 +1001,7 @@ def admin_dashboard():
                 r["full_name"] = emp_data.get("full_name", "Unknown")
                 recent_manager_requests.append(r)
 
-        recent_manager_requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        recent_manager_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         recent_manager_requests = recent_manager_requests[:5]
 
         return render_template(
@@ -1119,8 +1119,8 @@ def admin_requests():
                     decision_history.append(r)
 
         # Sort lists
-        pending_requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
-        decision_history.sort(key=lambda x: x.get("decision_date", ""), reverse=True)
+        pending_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
+        decision_history.sort(key=lambda x: x.get("decision_date") or "", reverse=True)
         decision_history = decision_history[:10]
 
         stats = {
@@ -1522,7 +1522,7 @@ def get_notifications():
             })
 
         # Sort in python
-        notifications.sort(key=lambda x: x["created_at"], reverse=True)
+        notifications.sort(key=lambda x: x.get("created_at") or datetime.now(), reverse=True)
         # Limit to 10
         notifications = notifications[:10]
 
