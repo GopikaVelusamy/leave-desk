@@ -1733,7 +1733,15 @@ def mark_notifications_read():
 
 # START APPLICATION
 # -----------------------------------------
-init_db()
+_db_initialized = False
+
+@app.before_request
+def initialize_database_lazy():
+    global _db_initialized
+    if not _db_initialized:
+        init_db()
+        _db_initialized = True
+
 
 if __name__ == "__main__":
     print("\n Employee Leave Portal Running (Firebase Mode)")
