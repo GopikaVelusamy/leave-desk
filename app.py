@@ -165,6 +165,28 @@ def home():
     return render_template("home.html")
 
 
+def verify_firebase_password(email, password):
+    api_key = "AIzaSyA9i4pJF7daO4ZlVFy64BWsO7TT9zLrfe4"
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True
+    }
+    try:
+        import requests
+        r = requests.post(url, json=payload, timeout=10)
+        res = r.json()
+        if r.status_code == 200:
+            return True, res.get("localId")
+        else:
+            error_message = res.get("error", {}).get("message", "")
+            return False, error_message
+    except Exception as e:
+        print(f"REST auth error: {e}")
+        return False, "CONNECTION_ERROR"
+
+
 # -----------------------------------------
 # SIGNUP
 # -----------------------------------------
@@ -214,7 +236,32 @@ def signup():
                 flash("Employee ID already exists!", "error")
                 return redirect(url_for("signup"))
 
-            db_firestore.collection("users").add({
+            # Check if user already exists in Firebase Auth
+            uid = None
+            try:
+                fb_user = firebase_auth.get_user_by_email(email)
+                uid = fb_user.uid
+                print(f"User with email {email} already exists in Firebase Auth. Reusing UID: {uid}")
+            except Exception:
+                pass
+
+            # If not in Firebase Auth, create them first to get a UID
+            if not uid:
+                try:
+                    fb_user = firebase_auth.create_user(
+                        email=email,
+                        password=password,
+                        display_name=full_name
+                    )
+                    uid = fb_user.uid
+                except Exception as e_auth:
+                    print(f"Firebase Auth signup creation failed: {e_auth}")
+                    # Fallback: use auto-generated ID
+                    uid = db_firestore.collection("users").document().id
+
+            # Create document in Firestore using the aligned UID
+            user_ref = db_firestore.collection("users").document(uid)
+            user_ref.set({
                 "employee_id": employee_id,
                 "password": hashed_password,
                 "full_name": full_name,
@@ -229,6 +276,7 @@ def signup():
                 "is_active": 1,
                 "must_change_password": 0
             })
+
             flash("Account created successfully!", "success")
             return redirect(url_for("login"))
         except Exception as e:
@@ -264,7 +312,53 @@ def login():
                 flash("Account has been deactivated.", "error")
                 return redirect(url_for("login"))
 
-            if check_password_hash(user["password"], password):
+            email = user.get("email")
+            authenticated = False
+
+            # Check if user exists in Firebase Auth by email first
+            in_firebase = False
+            if email:
+                try:
+                    firebase_auth.get_user_by_email(email)
+                    in_firebase = True
+                except Exception:
+                    in_firebase = False
+
+            # 1. Try to authenticate using Firebase Auth REST API (if user has an email and is in Firebase Auth)
+            if email and in_firebase:
+                success, error_code = verify_firebase_password(email, password)
+                if success:
+                    authenticated = True
+                    # Sync local password hash to match
+                    db_firestore.collection("users").document(user["id"]).update({
+                        "password": generate_password_hash(password)
+                    })
+                else:
+                    # Strict validation: Since user is in Firebase Auth, Firebase Auth is the source of truth.
+                    # We do NOT fall back to local check_password_hash.
+                    flash("Invalid Employee ID or Password!", "error")
+                    return redirect(url_for("login"))
+
+            # 2. Fall back to local check_password_hash if not authenticated yet (user not in Firebase Auth)
+            if not authenticated:
+                if check_password_hash(user["password"], password):
+                    authenticated = True
+                    # If this user has an email, register them in Firebase Auth on the fly so they can use forgot password in the future
+                    if email:
+                        try:
+                            firebase_auth.create_user(
+                                uid=user["id"],
+                                email=email,
+                                password=password,
+                                display_name=user["full_name"]
+                            )
+                        except Exception as e_auth:
+                            print(f"Sync-on-demand Firebase Auth creation failed: {e_auth}")
+                else:
+                    flash("Invalid Employee ID or Password!", "error")
+                    return redirect(url_for("login"))
+
+            if authenticated:
                 session["user_id"] = user["id"]
                 session["employee_id"] = user["employee_id"]
                 session["full_name"] = user["full_name"]
@@ -280,8 +374,6 @@ def login():
                     return redirect(url_for("manager_dashboard"))
                 else:
                     return redirect(url_for("employee_dashboard"))
-            else:
-                flash("Invalid Employee ID or Password!", "error")
         except Exception as e:
             print(f"Login error: {e}")
             flash("Login failed. Please try again.", "error")
@@ -437,6 +529,21 @@ def change_password():
                 "password": generate_password_hash(new_password),
                 "must_change_password": 0
             })
+            # Sync password update to Firebase Auth
+            try:
+                if user.get("email"):
+                    fb_user = firebase_auth.get_user_by_email(user["email"])
+                    firebase_auth.update_user(
+                        fb_user.uid,
+                        password=new_password
+                    )
+                else:
+                    firebase_auth.update_user(
+                        session["user_id"],
+                        password=new_password
+                    )
+            except Exception as e_auth:
+                print(f"Firebase Auth password update failed: {e_auth}")
             flash("Password changed successfully.", "success")
             return redirect(url_for("profile"))
 
