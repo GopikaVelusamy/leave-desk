@@ -690,18 +690,19 @@ def submit_leave():
             "approval_level": approval_level
         })
 
-        # Notify managers about new request
+        # Notify appropriate role (admin for manager leaves, manager for employee leaves)
         try:
-            managers = db_firestore.collection("users").where("role", "==", "manager").get()
-            for mgr in managers:
+            target_role = "admin" if session["role"] == "manager" else "manager"
+            receivers = db_firestore.collection("users").where("role", "==", target_role).get()
+            for rec in receivers:
                 send_notification(
-                    mgr.id,
+                    rec.id,
                     "New Leave Request",
-                    f"{session['full_name']} has applied for {leave_type} ({total_days} day(s)).",
+                    f"{session['full_name']} ({session['role'].capitalize()}) has applied for {leave_type} ({total_days} day(s)).",
                     "info"
                 )
         except Exception as e:
-            print(f"Manager notification error: {e}")
+            print(f"Notification routing error: {e}")
 
         flash(f"Leave request submitted successfully! ({total_days} day(s))", "success")
     except Exception as e:
