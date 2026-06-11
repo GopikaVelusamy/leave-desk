@@ -88,6 +88,13 @@ nav{
     font-size:1.1rem;
 }
 
+.table-container {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 20px;
+}
+
 table{
     width:100%;
     border-collapse:collapse;
@@ -241,6 +248,7 @@ textarea{
 
 {% if pending_requests %}
 
+<div class="table-container">
 <table>
 
 <thead>
@@ -266,7 +274,7 @@ textarea{
 
 <tr>
 
-    <td>{{ req.id }}</td>
+    <td><span title="{{ req.id }}" style="cursor: help; font-family: monospace; border-bottom: 1px dashed #ccc;">{{ req.id[:8] }}...</span></td>
     <td>{{ req.full_name }}</td>
     <td>{{ req.employee_id }}</td>
     <td>{{ req.leave_type }}</td>
@@ -317,6 +325,7 @@ textarea{
 </tbody>
 
 </table>
+</div>
 
 {% else %}
 
@@ -334,6 +343,7 @@ textarea{
 
 {% if decision_history %}
 
+<div class="table-container">
 <table>
 
 <thead>
@@ -381,6 +391,7 @@ textarea{
 </tbody>
 
 </table>
+</div>
 
 {% else %}
 

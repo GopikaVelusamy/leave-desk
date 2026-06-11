@@ -249,6 +249,13 @@
       border-color: #1a3a5c;
     }
 
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-bottom: 20px;
+    }
+
     @media(max-width:768px){
 
       nav{
@@ -412,6 +419,7 @@
 
     {% if all_requests %}
 
+    <div class="table-container">
     <table id="requestsTable">
 
       <thead>
@@ -436,7 +444,7 @@
         {% for r in all_requests %}
         <tr data-status="{{ r.status }}">
 
-          <td>{{ r.id }}</td>
+          <td><span title="{{ r.id }}" style="cursor: help; font-family: monospace; border-bottom: 1px dashed #ccc;">{{ r.id[:8] }}...</span></td>
 
           <td>
 
@@ -553,6 +561,7 @@
       </tbody>
 
     </table>
+    </div>
 
     {% else %}
 
