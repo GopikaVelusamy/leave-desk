@@ -296,9 +296,6 @@ footer{
             {% endif %}
         </a>
 
-        <a href="{{ url_for('add_manager') }}">
-            Add Manager
-        </a>
 
         <a href="{{ url_for('profile') }}">
             Profile
@@ -394,16 +391,6 @@ footer{
 
     <div class="action-grid">
 
-        <a href="{{ url_for('add_manager') }}"
-           class="action-card">
-
-            <h3>➕ Add Manager</h3>
-
-            <p>
-                Create a new manager account.
-            </p>
-
-        </a>
 
         <a href="{{ url_for('admin_requests') }}"
            class="action-card">
@@ -567,11 +554,6 @@ footer{
             Edit
             </a>
 
-            <a href="{{ url_for('reset_user_password', user_id=user.id) }}"
-            class="reset-btn"
-            onclick="return confirm('Reset password for this user?')">
-            Reset Password
-            </a>
 
             {% else %}
             -

@@ -454,33 +454,6 @@ def change_password():
 def forgot_password():
     return render_template("forgot_password.html")
 
-
-@app.route("/reset_user_password/<string:user_id>")
-def reset_user_password(user_id):
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-    if session["role"] != "admin":
-        return redirect(url_for("login"))
-
-    if not FIREBASE_ENABLED or db_firestore is None:
-        flash("Database service unavailable.", "error")
-        return redirect(url_for("admin_dashboard"))
-
-    try:
-        user_ref = db_firestore.collection("users").document(user_id)
-        temp_password = "Temp@123"
-        user_ref.update({
-            "password": generate_password_hash(temp_password),
-            "must_change_password": 1
-        })
-        flash("Password reset successfully. Temporary password: Temp@123", "success")
-    except Exception as e:
-        print(f"Reset password error: {e}")
-        flash("Could not reset password.", "error")
-
-    return redirect(url_for("admin_dashboard"))
-
-
 # -----------------------------------------
 # LOGOUT
 # -----------------------------------------
@@ -1043,56 +1016,6 @@ def admin_dashboard():
         return redirect(url_for("home"))
 
 
-@app.route("/add_manager", methods=["GET", "POST"])
-def add_manager():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-    if session["role"] != "admin":
-        return redirect(url_for("login"))
-
-    if not FIREBASE_ENABLED or db_firestore is None:
-        flash("Database service unavailable.", "error")
-        return redirect(url_for("admin_dashboard"))
-
-    if request.method == "POST":
-        employee_id = request.form["employee_id"].strip().upper()
-        full_name = request.form["full_name"]
-        email = request.form["email"]
-        phone = request.form["phone"]
-        department = request.form["department"]
-
-        try:
-            # Check duplicate ID
-            existing = db_firestore.collection("users").where("employee_id", "==", employee_id).limit(1).get()
-            if len(existing) > 0:
-                flash("Employee ID already exists.", "error")
-                return redirect(url_for("add_manager"))
-
-            db_firestore.collection("users").add({
-                "employee_id": employee_id,
-                "password": generate_password_hash("Manager@123"),
-                "full_name": full_name,
-                "email": email,
-                "phone": phone,
-                "department": department,
-                "designation": "Manager",
-                "role": "manager",
-                "casual_leave": 6,
-                "sick_leave": 6,
-                "annual_leave": 12,
-                "is_active": 1,
-                "must_change_password": 1
-            })
-            flash("Manager created successfully.", "success")
-            return redirect(url_for("admin_dashboard"))
-        except Exception as e:
-            print(f"Add manager error: {e}")
-            flash("Could not add manager. Please try again.", "error")
-            return redirect(url_for("add_manager"))
-
-    return render_template("add_manager.html")
-
-
 # -----------------------------------------
 # ADMIN - EDIT EMPLOYEE DETAILS
 # -----------------------------------------
@@ -1128,6 +1051,11 @@ def edit_employee(user_id):
             casual_leave = int(request.form["casual_leave"])
             sick_leave = int(request.form["sick_leave"])
             annual_leave = int(request.form["annual_leave"])
+            role = request.form["role"].strip().lower()
+
+            if role not in ["employee", "manager"]:
+                flash("Invalid role selection.", "error")
+                return redirect(url_for("admin_dashboard"))
 
             user_ref.update({
                 "full_name": full_name,
@@ -1137,7 +1065,8 @@ def edit_employee(user_id):
                 "designation": designation,
                 "casual_leave": casual_leave,
                 "sick_leave": sick_leave,
-                "annual_leave": annual_leave
+                "annual_leave": annual_leave,
+                "role": role
             })
             flash("User updated successfully.", "success")
             return redirect(url_for("admin_dashboard"))
