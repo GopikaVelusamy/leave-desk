@@ -127,7 +127,7 @@ textarea{
 
 <div>
 
-<a href="{{ url_for('employee_dashboard') }}">Dashboard</a> <a href="{{ url_for('my_requests') }}">My Requests</a> <a href="{{ url_for('profile') }}">Profile</a> <a href="{{ url_for('logout') }}">Logout</a>
+<a href="{{ url_for('employee_dashboard') }}">Dashboard</a> <a href="{{ url_for('my_requests') }}">My Requests</a> <a href="{{ url_for('profile') }}">Profile</a> {% include 'bell.html' %} <a href="{{ url_for('logout') }}">Logout</a>
 
 </div>
 

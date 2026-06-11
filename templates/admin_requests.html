@@ -193,19 +193,14 @@ textarea{
     </div>
 
     <div class="nav-links">
-
         <a href="{{ url_for('admin_dashboard') }}">
             Dashboard
         </a>
 
-        <a href="{{ url_for('add_manager') }}">
-            Add Manager
-        </a>
-
+        {% include 'bell.html' %}
         <a href="{{ url_for('logout') }}">
             Logout
         </a>
-
     </div>
 
 </nav>
