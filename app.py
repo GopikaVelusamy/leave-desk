@@ -1,6 +1,4 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, Response, jsonify
-import psycopg2
-import psycopg2.extras
 import re
 from datetime import datetime, timedelta, date
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,77 +6,165 @@ import secrets
 import os
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth, firestore
+import json
+import warnings
+
+# Suppress Firestore SDK positional argument UserWarnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+
 app = Flask(__name__)
 app.secret_key = os.environ.get(
     "SECRET_KEY",
     secrets.token_hex(32)
 )
+
 # -----------------------------------------
-# DATABASE CONNECTION STRING
-# Set your PostgreSQL URL in environment variable DATABASE_URL
-# Format: postgresql://username:password@host:port/dbname
-# On Render: set DATABASE_URL in your environment variables
+# FIREBASE ADMIN SETUP
 # -----------------------------------------
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/leave_portal")
-# Render sometimes gives 'postgres://' URLs — psycopg2 needs 'postgresql://'
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+firebase_credentials_json = os.environ.get("FIREBASE_CREDENTIALS")
+db_firestore = None
+FIREBASE_ENABLED = False
+
+if not firebase_admin._apps:
+    # Option 1: Env variable
+    if firebase_credentials_json:
+        try:
+            if firebase_credentials_json.strip().startswith("{"):
+                cred_dict = json.loads(firebase_credentials_json)
+                cred = credentials.Certificate(cred_dict)
+            else:
+                cred = credentials.Certificate(firebase_credentials_json)
+            firebase_admin.initialize_app(cred)
+            db_firestore = firestore.client()
+            FIREBASE_ENABLED = True
+            print("Firebase Admin initialized using FIREBASE_CREDENTIALS environment variable.")
+        except Exception as e:
+            print(f"Env credentials init failed: {e}")
+            if firebase_admin._apps:
+                firebase_admin.delete_app(firebase_admin.get_app())
+    
+    # Option 2: Local JSON key
+    if not FIREBASE_ENABLED:
+        local_keys = ["serviceAccountKey.json", "firebase-key.json"]
+        key_file = None
+        for key_path in local_keys:
+            if os.path.exists(key_path):
+                key_file = key_path
+                break
+        if key_file:
+            try:
+                cred = credentials.Certificate(key_file)
+                firebase_admin.initialize_app(cred)
+                db_firestore = firestore.client()
+                FIREBASE_ENABLED = True
+                print(f"Firebase Admin initialized using local key file: {key_file}")
+            except Exception as e:
+                print(f"Local key file init failed: {e}")
+                if firebase_admin._apps:
+                    firebase_admin.delete_app(firebase_admin.get_app())
+                    
+    # Option 3: Application Default Credentials
+    if not FIREBASE_ENABLED:
+        try:
+            cred = credentials.ApplicationDefault()
+            firebase_admin.initialize_app(cred)
+            db_firestore = firestore.client()
+            FIREBASE_ENABLED = True
+            print("Firebase Admin initialized using Application Default Credentials.")
+        except Exception as e:
+            print(f"Application Default Credentials init failed: {e}")
+            if firebase_admin._apps:
+                firebase_admin.delete_app(firebase_admin.get_app())
+                
+    # Option 4: Parameter-less initialization
+    if not FIREBASE_ENABLED:
+        try:
+            firebase_admin.initialize_app()
+            db_firestore = firestore.client()
+            FIREBASE_ENABLED = True
+            print("Firebase Admin initialized with default configuration.")
+        except Exception as e:
+            print(f"Default parameterless init failed: {e}")
+            if firebase_admin._apps:
+                firebase_admin.delete_app(firebase_admin.get_app())
+
+if not FIREBASE_ENABLED or db_firestore is None:
+    print("\n[WARNING] Firebase is not properly initialized! The application database will not work.\n")
+
+
+# Helper to convert Firestore document to dict with 'id' key
+def to_dict_with_id(doc):
+    if not doc.exists:
+        return None
+    d = doc.to_dict()
+    d["id"] = doc.id
+    return d
+
+
 # -----------------------------------------
 # DATABASE SETUP
 # -----------------------------------------
 def init_db():
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            employee_id TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            email TEXT DEFAULT '',
-            phone TEXT DEFAULT '',
-            department TEXT DEFAULT '',
-            designation TEXT DEFAULT '',
-            role TEXT NOT NULL,
-            casual_leave INTEGER DEFAULT 6,
-            sick_leave INTEGER DEFAULT 6,
-            annual_leave INTEGER DEFAULT 12,
-            is_active INTEGER DEFAULT 1,
-            must_change_password INTEGER DEFAULT 0
-        )
-    """)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS leave_requests (
-            id SERIAL PRIMARY KEY,
-            employee_id INTEGER NOT NULL,
-            leave_type TEXT NOT NULL,
-            start_date TEXT NOT NULL,
-            end_date TEXT NOT NULL,
-            total_days INTEGER DEFAULT 0,
-            reason TEXT NOT NULL,
-            status TEXT DEFAULT 'Pending',
-            manager_comment TEXT DEFAULT '',
-            decision_date TEXT DEFAULT '',
-            submitted_on TEXT NOT NULL,
-            approved_by INTEGER,
-            approval_level TEXT,
-            FOREIGN KEY(employee_id) REFERENCES users(id)
-        )
-    """)
-    conn.commit()
-    conn.close()
-# -----------------------------------------
-# DATABASE CONNECTION
-# -----------------------------------------
-def get_db():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-    return conn
+    if not FIREBASE_ENABLED or db_firestore is None:
+        print("Skipping DB initialization: Firebase is not enabled.")
+        return
+
+    try:
+        users_ref = db_firestore.collection("users")
+        # Check if users collection has any manager or admin
+        admin_query = users_ref.where("employee_id", "==", "ADMIN001").limit(1).get()
+        mgr_query = users_ref.where("employee_id", "==", "MGR001").limit(1).get()
+
+        if len(admin_query) == 0:
+            print("Creating default admin account (ADMIN001)...")
+            users_ref.add({
+                "employee_id": "ADMIN001",
+                "password": generate_password_hash("Admin@123"),
+                "full_name": "System Administrator",
+                "email": "admin@example.com",
+                "phone": "",
+                "department": "IT",
+                "designation": "Administrator",
+                "role": "admin",
+                "casual_leave": 6,
+                "sick_leave": 6,
+                "annual_leave": 12,
+                "is_active": 1,
+                "must_change_password": 1
+            })
+
+        if len(mgr_query) == 0:
+            print("Creating default manager account (MGR001)...")
+            users_ref.add({
+                "employee_id": "MGR001",
+                "password": generate_password_hash("Manager@123"),
+                "full_name": "System Manager",
+                "email": "manager@example.com",
+                "phone": "",
+                "department": "Management",
+                "designation": "Manager",
+                "role": "manager",
+                "casual_leave": 6,
+                "sick_leave": 6,
+                "annual_leave": 12,
+                "is_active": 1,
+                "must_change_password": 1
+            })
+
+        print("Database initialization check complete.")
+    except Exception as e:
+        print(f"Error during init_db: {e}")
+
+
 # -----------------------------------------
 # HOME PAGE
 # -----------------------------------------
 @app.route("/")
 def home():
     return render_template("home.html")
+
+
 # -----------------------------------------
 # SIGNUP
 # -----------------------------------------
@@ -86,254 +172,214 @@ def home():
 def signup():
     if request.method == "POST":
         full_name = request.form["full_name"]
-        employee_id = (request.form["employee_id"].strip().upper())
+        employee_id = request.form["employee_id"].strip().upper()
         email = request.form["email"].strip()
+
         if not re.match(r"^[^@]+@[^@]+\.[^@]+$", email):
-            flash(
-                "Please enter a valid email address.",
-                "error"
-            )
-            return redirect(
-                url_for("signup")
-            )
+            flash("Please enter a valid email address.", "error")
+            return redirect(url_for("signup"))
+
         password = request.form["password"]
         if len(password) < 8:
-            flash(
-                "Password must contain at least 8 characters.",
-                "error"
-            )
+            flash("Password must contain at least 8 characters.", "error")
             return redirect(url_for("signup"))
         if not re.search(r"[A-Z]", password):
-            flash(
-                "Password must contain at least one uppercase letter.",
-                "error"
-            )
+            flash("Password must contain at least one uppercase letter.", "error")
             return redirect(url_for("signup"))
         if not re.search(r"[a-z]", password):
-            flash(
-                "Password must contain at least one lowercase letter.",
-                "error"
-            )
+            flash("Password must contain at least one lowercase letter.", "error")
             return redirect(url_for("signup"))
         if not re.search(r"\d", password):
-            flash(
-                "Password must contain at least one number.",
-                "error"
-            )
+            flash("Password must contain at least one number.", "error")
             return redirect(url_for("signup"))
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
-            flash(
-                "Password must contain at least one special character.",
-                "error"
-            )
+            flash("Password must contain at least one special character.", "error")
             return redirect(url_for("signup"))
+
         role = "employee"
         confirm_password = request.form["confirm_password"]
         if password != confirm_password:
-            flash(
-                "Passwords do not match.",
-                "error"
-            )
-            return redirect(
-                url_for("signup")
-            )
+            flash("Passwords do not match.", "error")
+            return redirect(url_for("signup"))
+
+        if not FIREBASE_ENABLED or db_firestore is None:
+            flash("Database service unavailable.", "error")
+            return redirect(url_for("signup"))
+
         hashed_password = generate_password_hash(password)
-        conn = get_db()
-        c = conn.cursor()
         try:
-            c.execute(
-                """
-                INSERT INTO users
-                (employee_id, password, full_name, email, role)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                (employee_id, hashed_password, full_name, email, role)
-            )
-            conn.commit()
+            # Check duplicate employee_id
+            existing = db_firestore.collection("users").where("employee_id", "==", employee_id).limit(1).get()
+            if len(existing) > 0:
+                flash("Employee ID already exists!", "error")
+                return redirect(url_for("signup"))
+
+            db_firestore.collection("users").add({
+                "employee_id": employee_id,
+                "password": hashed_password,
+                "full_name": full_name,
+                "email": email,
+                "phone": "",
+                "department": "",
+                "designation": "",
+                "role": role,
+                "casual_leave": 6,
+                "sick_leave": 6,
+                "annual_leave": 12,
+                "is_active": 1,
+                "must_change_password": 0
+            })
             flash("Account created successfully!", "success")
             return redirect(url_for("login"))
-        except psycopg2.IntegrityError:
-            conn.rollback()
-            flash("Employee ID already exists!", "error")
-        finally:
-            conn.close()
+        except Exception as e:
+            print(f"Signup error: {e}")
+            flash("An error occurred. Please try again.", "error")
+
     return render_template("signup.html")
+
+
 # -----------------------------------------
 # LOGIN
 # -----------------------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        employee_id = (request.form["employee_id"].strip().upper())
+        employee_id = request.form["employee_id"].strip().upper()
         password = request.form["password"]
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            """
-            SELECT * FROM users
-            WHERE employee_id=%s
-            """,
-            (employee_id,)
-        )
-        user = c.fetchone()
-        if user and user["is_active"] == 0:
-            conn.close()
-            flash(
-                "Account has been deactivated.",
-                "error"
-            )
+
+        if not FIREBASE_ENABLED or db_firestore is None:
+            flash("Database service unavailable.", "error")
             return redirect(url_for("login"))
-        conn.close()
-        if user and check_password_hash(user["password"], password):
-            session["user_id"] = user["id"]
-            session["employee_id"] = user["employee_id"]
-            session["full_name"] = user["full_name"]
-            session["role"] = user["role"]
-            if user["must_change_password"]:
-                flash(
-                    "Please change your password before continuing.",
-                    "error"
-                )
-                return redirect(
-                    url_for("change_password")
-                )
-            if user["role"] == "admin":
-                return redirect(url_for("admin_dashboard"))
-            elif user["role"] == "manager":
-                return redirect(url_for("manager_dashboard"))
+
+        try:
+            user_docs = db_firestore.collection("users").where("employee_id", "==", employee_id).limit(1).get()
+            if len(user_docs) == 0:
+                flash("Invalid Employee ID or Password!", "error")
+                return redirect(url_for("login"))
+
+            user_doc = user_docs[0]
+            user = to_dict_with_id(user_doc)
+
+            if user.get("is_active", 1) == 0:
+                flash("Account has been deactivated.", "error")
+                return redirect(url_for("login"))
+
+            if check_password_hash(user["password"], password):
+                session["user_id"] = user["id"]
+                session["employee_id"] = user["employee_id"]
+                session["full_name"] = user["full_name"]
+                session["role"] = user["role"]
+
+                if user.get("must_change_password", 0) == 1:
+                    flash("Please change your password before continuing.", "error")
+                    return redirect(url_for("change_password"))
+
+                if user["role"] == "admin":
+                    return redirect(url_for("admin_dashboard"))
+                elif user["role"] == "manager":
+                    return redirect(url_for("manager_dashboard"))
+                else:
+                    return redirect(url_for("employee_dashboard"))
             else:
-                return redirect(url_for("employee_dashboard"))
-        else:
-            flash("Invalid Employee ID or Password!", "error")
+                flash("Invalid Employee ID or Password!", "error")
+        except Exception as e:
+            print(f"Login error: {e}")
+            flash("Login failed. Please try again.", "error")
+
     return render_template("login.html")
+
+
+# -----------------------------------------
+# PROFILE
+# -----------------------------------------
 @app.route("/profile")
 def profile():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id=%s
-        """,
-        (session["user_id"],)
-    )
-    user = c.fetchone()
-    c.execute(
-        """
-        SELECT
-            COUNT(*) as total,
-            SUM(CASE WHEN status='Approved' THEN 1 ELSE 0 END) as approved,
-            SUM(CASE WHEN status='Rejected' THEN 1 ELSE 0 END) as rejected,
-            SUM(CASE WHEN status='Pending' THEN 1 ELSE 0 END) as pending
-        FROM leave_requests
-        WHERE employee_id=%s
-        """,
-        (session["user_id"],)
-    )
-    stats = c.fetchone()
-    conn.close()
-    return render_template(
-        "profile.html",
-        user=user,
-        stats=stats
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        user_doc = db_firestore.collection("users").document(session["user_id"]).get()
+        if not user_doc.exists:
+            session.clear()
+            return redirect(url_for("login"))
+        user = to_dict_with_id(user_doc)
+
+        reqs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
+        total = 0
+        approved = 0
+        rejected = 0
+        pending = 0
+        for doc in reqs:
+            d = doc.to_dict()
+            total += 1
+            status = d.get("status", "Pending")
+            if status == "Approved":
+                approved += 1
+            elif status == "Rejected":
+                rejected += 1
+            elif status == "Pending":
+                pending += 1
+
+        stats = {
+            "total": total,
+            "approved": approved,
+            "rejected": rejected,
+            "pending": pending
+        }
+        return render_template("profile.html", user=user, stats=stats)
+    except Exception as e:
+        print(f"Profile load error: {e}")
+        flash("Could not load profile details.", "error")
+        return redirect(url_for("home"))
+
+
 # -----------------------------------------
 # EDIT PROFILE
 # -----------------------------------------
-@app.route(
-    "/edit_profile",
-    methods=["GET", "POST"]
-)
+@app.route("/edit_profile", methods=["GET", "POST"])
 def edit_profile():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    if request.method == "POST":
-        email = request.form["email"].strip()
-        phone = request.form["phone"].strip()
-        department = request.form.get(
-            "department",
-            ""
-        ).strip()
-        designation = request.form.get(
-            "designation",
-            ""
-        ).strip()
-        # -----------------------------------------
-        # EMAIL VALIDATION
-        # -----------------------------------------
-        if not re.match(
-            r"^[^@]+@[^@]+\.[^@]+$",
-            email
-        ):
-            flash(
-                "Please enter a valid email address.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("edit_profile")
-            )
-        # -----------------------------------------
-        # PHONE VALIDATION (OPTIONAL)
-        # -----------------------------------------
-        if phone:
-            if not re.fullmatch(
-                r"\d{10}",
-                phone
-            ):
-                flash(
-                    "Phone number must contain exactly 10 digits.",
-                    "error"
-                )
-                conn.close()
-                return redirect(
-                    url_for("edit_profile")
-                )
-        # -----------------------------------------
-        # UPDATE PROFILE
-        # -----------------------------------------
-        c.execute(
-            """
-            UPDATE users
-            SET
-                email=%s,
-                phone=%s
-            WHERE id=%s
-            """,
-            (
-                email,
-                phone,
-                session["user_id"]
-            )
-        )
-        conn.commit()
-        flash(
-            "Profile updated successfully.",
-            "success"
-        )
-        conn.close()
-        return redirect(
-            url_for("edit_profile")
-        )
-    c.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id=%s
-        """,
-        (session["user_id"],)
-    )
-    user = c.fetchone()
-    conn.close()
-    return render_template(
-        "edit_profile.html",
-        user=user
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        user_ref = db_firestore.collection("users").document(session["user_id"])
+        if request.method == "POST":
+            email = request.form["email"].strip()
+            phone = request.form["phone"].strip()
+
+            if not re.match(r"^[^@]+@[^@]+\.[^@]+$", email):
+                flash("Please enter a valid email address.", "error")
+                return redirect(url_for("edit_profile"))
+
+            if phone:
+                if not re.fullmatch(r"\d{10}", phone):
+                    flash("Phone number must contain exactly 10 digits.", "error")
+                    return redirect(url_for("edit_profile"))
+
+            user_ref.update({
+                "email": email,
+                "phone": phone
+            })
+            flash("Profile updated successfully.", "success")
+            return redirect(url_for("edit_profile"))
+
+        user_doc = user_ref.get()
+        user = to_dict_with_id(user_doc)
+        return render_template("edit_profile.html", user=user)
+    except Exception as e:
+        print(f"Edit profile error: {e}")
+        flash("An error occurred.", "error")
+        return redirect(url_for("profile"))
+
+
 # -----------------------------------------
 # CHANGE PASSWORD
 # -----------------------------------------
@@ -341,178 +387,100 @@ def edit_profile():
 def change_password():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    if session["role"] not in [
-        "employee",
-        "manager",
-        "admin"
-    ]:
+
+    if session["role"] not in ["employee", "manager", "admin"]:
         return redirect(url_for("login"))
-    if request.method == "POST":
-        current_password = request.form["current_password"]
-        new_password = request.form["new_password"]
-        confirm_password = request.form["confirm_password"]
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(
-            """
-            SELECT *
-            FROM users
-            WHERE id=%s
-            """,
-            (session["user_id"],)
-        )
-        user = c.fetchone()
-        if not check_password_hash(
-            user["password"],
-            current_password
-        ):
-            flash(
-                "Current password is incorrect.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("change_password")
-            )
-        if check_password_hash(
-            user["password"],
-            new_password
-        ):
-            flash(
-                "New password cannot be the same as the current password.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("change_password")
-            )
-        if new_password != confirm_password:
-            flash(
-                "Passwords do not match.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("change_password")
-            )
-        if len(new_password) < 8:
-            flash(
-                "Password must contain at least 8 characters.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("change_password")
-            )
-        if not re.search(r"[A-Z]", new_password):
-            flash(
-                "Password must contain one uppercase letter.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("change_password")
-            )
-        if not re.search(r"[a-z]", new_password):
-            flash(
-                "Password must contain one lowercase letter.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("change_password")
-            )
-        if not re.search(r"\d", new_password):
-            flash(
-                "Password must contain one number.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("change_password")
-            )
-        if not re.search(
-            r"[!@#$%^&*(),.?\":{}|<>]",
-            new_password
-        ):
-            flash(
-                "Password must contain one special character.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("change_password")
-            )
-        c.execute(
-            """
-            UPDATE users
-            SET password=%s,
-                must_change_password=0
-            WHERE id=%s
-            """,
-            (
-                generate_password_hash(
-                    new_password
-                ),
-                session["user_id"]
-            )
-        )
-        conn.commit()
-        conn.close()
-        flash(
-            "Password changed successfully.",
-            "success"
-        )
-        return redirect(
-            url_for("profile")
-        )
-    return render_template(
-        "change_password.html"
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        user_ref = db_firestore.collection("users").document(session["user_id"])
+        if request.method == "POST":
+            current_password = request.form["current_password"]
+            new_password = request.form["new_password"]
+            confirm_password = request.form["confirm_password"]
+
+            user_doc = user_ref.get()
+            user = to_dict_with_id(user_doc)
+
+            if not check_password_hash(user["password"], current_password):
+                flash("Current password is incorrect.", "error")
+                return redirect(url_for("change_password"))
+
+            if check_password_hash(user["password"], new_password):
+                flash("New password cannot be the same as the current password.", "error")
+                return redirect(url_for("change_password"))
+
+            if new_password != confirm_password:
+                flash("Passwords do not match.", "error")
+                return redirect(url_for("change_password"))
+
+            if len(new_password) < 8:
+                flash("Password must contain at least 8 characters.", "error")
+                return redirect(url_for("change_password"))
+            if not re.search(r"[A-Z]", new_password):
+                flash("Password must contain one uppercase letter.", "error")
+                return redirect(url_for("change_password"))
+            if not re.search(r"[a-z]", new_password):
+                flash("Password must contain one lowercase letter.", "error")
+                return redirect(url_for("change_password"))
+            if not re.search(r"\d", new_password):
+                flash("Password must contain one number.", "error")
+                return redirect(url_for("change_password"))
+            if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", new_password):
+                flash("Password must contain one special character.", "error")
+                return redirect(url_for("change_password"))
+
+            user_ref.update({
+                "password": generate_password_hash(new_password),
+                "must_change_password": 0
+            })
+            flash("Password changed successfully.", "success")
+            return redirect(url_for("profile"))
+
+        return render_template("change_password.html")
+    except Exception as e:
+        print(f"Change password error: {e}")
+        flash("An error occurred.", "error")
+        return redirect(url_for("profile"))
+
+
 # -----------------------------------------
 # FORGOT PASSWORD
 # -----------------------------------------
-@app.route(
-    "/forgot_password",
-    methods=["GET"]
-)
+@app.route("/forgot_password", methods=["GET"])
 def forgot_password():
-    return render_template(
-        "forgot_password.html"
-    )
-@app.route("/reset_user_password/<int:user_id>")
+    return render_template("forgot_password.html")
+
+
+@app.route("/reset_user_password/<string:user_id>")
 def reset_user_password(user_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
     if session["role"] != "admin":
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    temp_password = "Temp@123"
-    c.execute(
-        """
-        UPDATE users
-        SET
-            password=%s,
-            must_change_password=1
-        WHERE id=%s
-        """,
-        (
-            generate_password_hash(
-                temp_password
-            ),
-            user_id
-        )
-    )
-    conn.commit()
-    conn.close()
-    flash(
-        "Password reset successfully. Temporary password: Temp@123",
-        "success"
-    )
-    return redirect(
-        url_for("admin_dashboard")
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("admin_dashboard"))
+
+    try:
+        user_ref = db_firestore.collection("users").document(user_id)
+        temp_password = "Temp@123"
+        user_ref.update({
+            "password": generate_password_hash(temp_password),
+            "must_change_password": 1
+        })
+        flash("Password reset successfully. Temporary password: Temp@123", "success")
+    except Exception as e:
+        print(f"Reset password error: {e}")
+        flash("Could not reset password.", "error")
+
+    return redirect(url_for("admin_dashboard"))
+
+
 # -----------------------------------------
 # LOGOUT
 # -----------------------------------------
@@ -520,6 +488,8 @@ def reset_user_password(user_id):
 def logout():
     session.clear()
     return redirect(url_for("home"))
+
+
 # -----------------------------------------
 # EMPLOYEE DASHBOARD
 # -----------------------------------------
@@ -529,71 +499,77 @@ def employee_dashboard():
         return redirect(url_for("login"))
     if session["role"] != "employee":
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id=%s
-        """,
-        (session["user_id"],)
-    )
-    user = c.fetchone()
-    c.execute(
-        """
-        SELECT
-            COUNT(*) AS total,
-            SUM(CASE WHEN status='Pending' THEN 1 ELSE 0 END) AS pending,
-            SUM(CASE WHEN status='Approved' THEN 1 ELSE 0 END) AS approved,
-            SUM(CASE WHEN status='Rejected' THEN 1 ELSE 0 END) AS rejected
-        FROM leave_requests
-        WHERE employee_id=%s
-        """,
-        (session["user_id"],)
-    )
-    stats = c.fetchone()
-    conn.close()
-    return render_template(
-        "employee_dashboard.html",
-        user=user,
-        stats=stats
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        user_doc = db_firestore.collection("users").document(session["user_id"]).get()
+        if not user_doc.exists:
+            session.clear()
+            return redirect(url_for("login"))
+        user = to_dict_with_id(user_doc)
+
+        reqs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
+        total = 0
+        pending = 0
+        approved = 0
+        rejected = 0
+        for doc in reqs:
+            d = doc.to_dict()
+            total += 1
+            status = d.get("status", "Pending")
+            if status == "Pending":
+                pending += 1
+            elif status == "Approved":
+                approved += 1
+            elif status == "Rejected":
+                rejected += 1
+
+        stats = {
+            "total": total,
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected
+        }
+        return render_template("employee_dashboard.html", user=user, stats=stats)
+    except Exception as e:
+        print(f"Employee dashboard error: {e}")
+        flash("Could not load dashboard stats.", "error")
+        return redirect(url_for("home"))
+
+
 @app.route("/apply_leave")
 def apply_leave():
     if "user_id" not in session:
         return redirect(url_for("login"))
     today = date.today()
-    max_date = (
-        today + timedelta(days=180)
-    ).strftime("%Y-%m-%d")
+    max_date = (today + timedelta(days=180)).strftime("%Y-%m-%d")
     today = today.strftime("%Y-%m-%d")
-    return render_template(
-        "apply_leave.html",
-        today=today,
-        max_date=max_date
-    )
+    return render_template("apply_leave.html", today=today, max_date=max_date)
+
+
 @app.route("/my_requests")
 def my_requests():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT *
-        FROM leave_requests
-        WHERE employee_id=%s
-        ORDER BY submitted_on DESC
-        """,
-        (session["user_id"],)
-    )
-    requests = c.fetchall()
-    conn.close()
-    return render_template(
-        "my_requests.html",
-        requests=requests
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        docs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
+        requests = [to_dict_with_id(d) for d in docs]
+        requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        return render_template("my_requests.html", requests=requests)
+    except Exception as e:
+        print(f"My requests load error: {e}")
+        flash("Could not load requests list.", "error")
+        return redirect(url_for("employee_dashboard"))
+
+
 # -----------------------------------------
 # LEAVE STATISTICS
 # -----------------------------------------
@@ -601,44 +577,41 @@ def my_requests():
 def leave_statistics():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT
-            COUNT(*) total,
-            SUM(
-                CASE
-                WHEN status='Approved'
-                THEN 1
-                ELSE 0
-                END
-            ) approved,
-            SUM(
-                CASE
-                WHEN status='Rejected'
-                THEN 1
-                ELSE 0
-                END
-            ) rejected,
-            SUM(
-                CASE
-                WHEN status='Pending'
-                THEN 1
-                ELSE 0
-                END
-            ) pending
-        FROM leave_requests
-        WHERE employee_id=%s
-        """,
-        (session["user_id"],)
-    )
-    stats = c.fetchone()
-    conn.close()
-    return render_template(
-        "leave_statistics.html",
-        stats=stats
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        docs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
+        total = 0
+        approved = 0
+        rejected = 0
+        pending = 0
+        for doc in docs:
+            d = doc.to_dict()
+            total += 1
+            status = d.get("status", "Pending")
+            if status == "Approved":
+                approved += 1
+            elif status == "Rejected":
+                rejected += 1
+            elif status == "Pending":
+                pending += 1
+
+        stats = {
+            "total": total,
+            "approved": approved,
+            "rejected": rejected,
+            "pending": pending
+        }
+        return render_template("leave_statistics.html", stats=stats)
+    except Exception as e:
+        print(f"Leave stats error: {e}")
+        flash("An error occurred loading statistics.", "error")
+        return redirect(url_for("employee_dashboard"))
+
+
 # -----------------------------------------
 # SUBMIT LEAVE
 # -----------------------------------------
@@ -648,255 +621,164 @@ def submit_leave():
         return redirect(url_for("login"))
     if session["role"] not in ["employee", "manager"]:
         return redirect(url_for("login"))
-    dashboard_route = (
-        "manager_leave"
-        if session["role"] == "manager"
-        else "employee_dashboard"
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    dashboard_route = "manager_leave" if session["role"] == "manager" else "employee_dashboard"
     leave_type = request.form["leave_type"]
     start_date = request.form["start_date"]
     end_date = request.form["end_date"]
     reason = request.form["reason"]
+
     today = date.today()
-    start_date_obj = datetime.strptime(
-        start_date,
-        "%Y-%m-%d"
-    ).date()
-    end_date_obj = datetime.strptime(
-        end_date,
-        "%Y-%m-%d"
-    ).date()
+    try:
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date format.", "error")
+        return redirect(url_for("apply_leave"))
+
     if start_date_obj < today:
-        flash(
-            "Start date cannot be in the past.",
-            "error"
-        )
-        return redirect(
-            url_for("apply_leave")
-        )
+        flash("Start date cannot be in the past.", "error")
+        return redirect(url_for("apply_leave"))
     if end_date_obj < start_date_obj:
-        flash(
-            "End date cannot be earlier than start date.",
-            "error"
-        )
-        return redirect(
-            url_for("apply_leave")
-        )
+        flash("End date cannot be earlier than start date.", "error")
+        return redirect(url_for("apply_leave"))
+
     max_future = today + timedelta(days=180)
     if start_date_obj > max_future:
-        flash(
-            "Leave can only be applied up to 6 months in advance.",
-            "error"
-        )
-        return redirect(
-            url_for("apply_leave")
-        )
+        flash("Leave can only be applied up to 6 months in advance.", "error")
+        return redirect(url_for("apply_leave"))
     if end_date_obj > max_future:
-        flash(
-            "Leave cannot extend beyond 6 months from today.",
-            "error"
-        )
-        return redirect(
-            url_for("apply_leave")
-        )
-    total_days = (
-        end_date_obj - start_date_obj
-    ).days + 1
+        flash("Leave cannot extend beyond 6 months from today.", "error")
+        return redirect(url_for("apply_leave"))
+
+    total_days = (end_date_obj - start_date_obj).days + 1
     if total_days <= 0:
-        flash(
-            "Invalid leave duration.",
-            "error"
-        )
-        return redirect(
-            url_for("apply_leave")
-        )
+        flash("Invalid leave duration.", "error")
+        return redirect(url_for("apply_leave"))
     if total_days > 30:
-        flash(
-            "A single leave request cannot exceed 30 days.",
-            "error"
-        )
-        return redirect(
-            url_for("apply_leave")
-        )
-    submitted_on = datetime.now().strftime(
-        "%Y-%m-%d %H:%M"
-    )
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id=%s
-        """,
-        (session["user_id"],)
-    )
-    user = c.fetchone()
-    if leave_type == "Casual Leave":
-        available_leave = user["casual_leave"]
-    elif leave_type == "Sick Leave":
-        available_leave = user["sick_leave"]
-    elif leave_type == "Annual Leave":
-        available_leave = user["annual_leave"]
-    else:
-        available_leave = None
-    if available_leave is not None:
-        if total_days > available_leave:
-            flash(
-                f"Only {available_leave} day(s) available for {leave_type}.",
-                "error"
-            )
-            conn.close()
-            return redirect(
-                url_for("apply_leave")
-            )
-    c.execute(
-        """
-        SELECT *
-        FROM leave_requests
-        WHERE employee_id=%s
-        AND (
-            start_date <= %s
-            AND end_date >= %s
-        )
-        """,
-        (
-            session["user_id"],
-            end_date,
-            start_date
-        )
-    )
-    existing = c.fetchone()
-    if existing:
-        flash(
-            "You already have a leave request during these dates.",
-            "error"
-        )
-        conn.close()
-        return redirect(
-            url_for("apply_leave")
-        )
-    approval_level = (
-        "admin"
-        if session["role"] == "manager"
-        else "manager"
-    )
-    c.execute(
-        """
-        INSERT INTO leave_requests
-        (
-            employee_id,
-            leave_type,
-            start_date,
-            end_date,
-            total_days,
-            reason,
-            submitted_on,
-            approval_level
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            session["user_id"],
-            leave_type,
-            start_date,
-            end_date,
-            total_days,
-            reason,
-            submitted_on,
-            approval_level
-        )
-    )
-    conn.commit()
+        flash("A single leave request cannot exceed 30 days.", "error")
+        return redirect(url_for("apply_leave"))
 
-    # Notify all managers about new leave request
+    submitted_on = datetime.now().strftime("%Y-%m-%d %H:%M")
+
     try:
-        conn2 = get_db()
-        c2 = conn2.cursor()
-        c2.execute("SELECT id FROM users WHERE role='manager'")
-        managers = c2.fetchall()
-        conn2.close()
-        for mgr in managers:
-            send_notification(
-                mgr["id"],
-                "New Leave Request",
-                f"{session['full_name']} has applied for {leave_type} ({total_days} day(s)).",
-                "info"
-            )
-    except Exception as e:
-        print(f"Manager notification error: {e}")
+        user_ref = db_firestore.collection("users").document(session["user_id"])
+        user_doc = user_ref.get()
+        user = to_dict_with_id(user_doc)
 
-    conn.close()
-    flash(
-        f"Leave request submitted successfully! ({total_days} day(s))",
-        "success"
-    )
-    return redirect(
-        url_for(dashboard_route)
-    )
+        if leave_type == "Casual Leave":
+            available_leave = user.get("casual_leave", 0)
+        elif leave_type == "Sick Leave":
+            available_leave = user.get("sick_leave", 0)
+        elif leave_type == "Annual Leave":
+            available_leave = user.get("annual_leave", 0)
+        else:
+            available_leave = None
+
+        if available_leave is not None:
+            if total_days > available_leave:
+                flash(f"Only {available_leave} day(s) available for {leave_type}.", "error")
+                return redirect(url_for("apply_leave"))
+
+        # Overlap check
+        existing_reqs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
+        overlapping = False
+        for doc in existing_reqs:
+            d = doc.to_dict()
+            # If the request status is cancelled/rejected, maybe overlap is fine?
+            # But the original SQL checked all requests. Let's keep that logic but ignore Rejected.
+            if d.get("status") == "Rejected":
+                continue
+            if (d.get("start_date") <= end_date) and (d.get("end_date") >= start_date):
+                overlapping = True
+                break
+
+        if overlapping:
+            flash("You already have a leave request during these dates.", "error")
+            return redirect(url_for("apply_leave"))
+
+        approval_level = "admin" if session["role"] == "manager" else "manager"
+        db_firestore.collection("leave_requests").add({
+            "employee_id": session["user_id"],
+            "leave_type": leave_type,
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_days": int(total_days),
+            "reason": reason,
+            "status": "Pending",
+            "manager_comment": "",
+            "decision_date": "",
+            "submitted_on": submitted_on,
+            "approved_by": None,
+            "approval_level": approval_level
+        })
+
+        # Notify managers about new request
+        try:
+            managers = db_firestore.collection("users").where("role", "==", "manager").get()
+            for mgr in managers:
+                send_notification(
+                    mgr.id,
+                    "New Leave Request",
+                    f"{session['full_name']} has applied for {leave_type} ({total_days} day(s)).",
+                    "info"
+                )
+        except Exception as e:
+            print(f"Manager notification error: {e}")
+
+        flash(f"Leave request submitted successfully! ({total_days} day(s))", "success")
+    except Exception as e:
+        print(f"Submit leave error: {e}")
+        flash("Could not submit leave request. Please try again.", "error")
+
+    return redirect(url_for(dashboard_route))
+
+
 # -----------------------------------------
 # CANCEL LEAVE
 # -----------------------------------------
-@app.route("/cancel_leave/<int:request_id>")
+@app.route("/cancel_leave/<string:request_id>")
 def cancel_leave(request_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
     if session["role"] not in ["employee", "manager"]:
         return redirect(url_for("login"))
-    dashboard_route = (
-        "manager_leave"
-        if session["role"] == "manager"
-        else "employee_dashboard"
-    )
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT *
-        FROM leave_requests
-        WHERE id=%s
-        AND employee_id=%s
-        """,
-        (
-            request_id,
-            session["user_id"]
-        )
-    )
-    leave = c.fetchone()
-    if not leave:
-        flash(
-            "Leave request not found.",
-            "error"
-        )
-        conn.close()
-        return redirect(
-            url_for(dashboard_route)
-        )
-    if leave["status"] != "Pending":
-        flash(
-            "Only pending requests can be cancelled.",
-            "error"
-        )
-        conn.close()
-        return redirect(
-            url_for(dashboard_route)
-        )
-    c.execute(
-        """
-        DELETE FROM leave_requests
-        WHERE id=%s
-        """,
-        (request_id,)
-    )
-    conn.commit()
-    conn.close()
-    flash(
-        "Leave request cancelled successfully.",
-        "success"
-    )
-    return redirect(
-        url_for(dashboard_route)
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    dashboard_route = "manager_leave" if session["role"] == "manager" else "employee_dashboard"
+
+    try:
+        req_ref = db_firestore.collection("leave_requests").document(request_id)
+        req_doc = req_ref.get()
+        if not req_doc.exists:
+            flash("Leave request not found.", "error")
+            return redirect(url_for(dashboard_route))
+
+        leave = to_dict_with_id(req_doc)
+        if leave["employee_id"] != session["user_id"]:
+            flash("Unauthorized access.", "error")
+            return redirect(url_for(dashboard_route))
+
+        if leave["status"] != "Pending":
+            flash("Only pending requests can be cancelled.", "error")
+            return redirect(url_for(dashboard_route))
+
+        req_ref.delete()
+        flash("Leave request cancelled successfully.", "success")
+    except Exception as e:
+        print(f"Cancel leave error: {e}")
+        flash("Could not cancel request.", "error")
+
+    return redirect(url_for(dashboard_route))
+
+
 # -----------------------------------------
 # MANAGER DASHBOARD
 # -----------------------------------------
@@ -906,81 +788,65 @@ def manager_dashboard():
         return redirect(url_for("login"))
     if session["role"] != "manager":
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id=%s
-        """,
-        (session["user_id"],)
-    )
-    user = c.fetchone()
-    c.execute(
-        """
-        SELECT
-            SUM(
-                CASE
-                    WHEN status='Pending'
-                    AND approval_level='manager'
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS pending,
-            SUM(
-                CASE
-                    WHEN status='Approved'
-                    AND approval_level='manager'
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS approved,
-            SUM(
-                CASE
-                    WHEN status='Rejected'
-                    AND approval_level='manager'
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS rejected
-        FROM leave_requests
-        """
-    )
-    stats = c.fetchone()
-    c.execute(
-        """
-        SELECT COUNT(*)
-        FROM users
-        WHERE role='employee'
-        """
-    )
-    total_employees = c.fetchone()["count"]
-    c.execute(
-        """
-        SELECT
-            lr.leave_type,
-            lr.start_date,
-            lr.end_date,
-            lr.status,
-            u.full_name
-        FROM leave_requests lr
-        JOIN users u
-        ON lr.employee_id = u.id
-        WHERE lr.approval_level='manager'
-        ORDER BY lr.submitted_on DESC
-        LIMIT 5
-        """
-    )
-    recent_requests = c.fetchall()
-    conn.close()
-    return render_template(
-        "manager_home.html",
-        user=user,
-        stats=stats,
-        total_employees=total_employees,
-        recent_requests=recent_requests
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        user_doc = db_firestore.collection("users").document(session["user_id"]).get()
+        user = to_dict_with_id(user_doc)
+
+        reqs_docs = db_firestore.collection("leave_requests").get()
+        pending = 0
+        approved = 0
+        rejected = 0
+
+        users_docs = db_firestore.collection("users").get()
+        users_dict = {u.id: to_dict_with_id(u) for u in users_docs}
+
+        all_manager_requests = []
+        for doc in reqs_docs:
+            d = to_dict_with_id(doc)
+            if d.get("approval_level") == "manager":
+                status = d.get("status", "Pending")
+                if status == "Pending":
+                    pending += 1
+                elif status == "Approved":
+                    approved += 1
+                elif status == "Rejected":
+                    rejected += 1
+
+                emp_id = d.get("employee_id")
+                emp_data = users_dict.get(emp_id, {})
+                d["full_name"] = emp_data.get("full_name", "Unknown")
+                all_manager_requests.append(d)
+
+        # Sort and take 5
+        all_manager_requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        recent_requests = all_manager_requests[:5]
+
+        total_employees = sum(1 for u in users_dict.values() if u.get("role") == "employee")
+
+        stats = {
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected
+        }
+
+        return render_template(
+            "manager_home.html",
+            user=user,
+            stats=stats,
+            total_employees=total_employees,
+            recent_requests=recent_requests
+        )
+    except Exception as e:
+        print(f"Manager dashboard error: {e}")
+        flash("An error occurred loading manager dashboard.", "error")
+        return redirect(url_for("home"))
+
+
 # -----------------------------------------
 # EMPLOYEE LEAVE REQUESTS
 # -----------------------------------------
@@ -990,91 +856,79 @@ def manager_requests():
         return redirect(url_for("login"))
     if session["role"] != "manager":
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    search = request.args.get("search", "").strip()
-    if search:
-        c.execute(
-            """
-            SELECT
-                lr.*,
-                u.full_name AS employee_name,
-                u.employee_id AS employee_code,
-                u.casual_leave,
-                u.sick_leave,
-                u.annual_leave
-            FROM leave_requests lr
-            JOIN users u
-            ON lr.employee_id = u.id
-            WHERE
-            (
-                u.employee_id ILIKE %s
-                OR u.full_name ILIKE %s
-            )
-            AND u.role='employee'
-            AND lr.approval_level='manager'
-            ORDER BY
-                CASE
-                    WHEN lr.status='Pending' THEN 0
-                    ELSE 1
-                END,
-                lr.submitted_on DESC
-            """,
-            (
-                f"%{search}%",
-                f"%{search}%"
-            )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        search = request.args.get("search", "").strip().lower()
+
+        users_docs = db_firestore.collection("users").get()
+        users_dict = {u.id: to_dict_with_id(u) for u in users_docs}
+
+        reqs_docs = db_firestore.collection("leave_requests").get()
+        all_requests = []
+
+        pending_cnt = 0
+        approved_cnt = 0
+        rejected_cnt = 0
+
+        for doc in reqs_docs:
+            d = to_dict_with_id(doc)
+            if d.get("approval_level") == "manager":
+                status = d.get("status", "Pending")
+                if status == "Pending":
+                    pending_cnt += 1
+                elif status == "Approved":
+                    approved_cnt += 1
+                elif status == "Rejected":
+                    rejected_cnt += 1
+
+                emp_id = d.get("employee_id")
+                emp_data = users_dict.get(emp_id, {})
+                if emp_data.get("role") != "employee":
+                    continue
+
+                d["employee_name"] = emp_data.get("full_name", "Unknown")
+                d["employee_code"] = emp_data.get("employee_id", "Unknown")
+                d["casual_leave"] = emp_data.get("casual_leave", 6)
+                d["sick_leave"] = emp_data.get("sick_leave", 6)
+                d["annual_leave"] = emp_data.get("annual_leave", 12)
+
+                if search:
+                    code_match = search in d["employee_code"].lower()
+                    name_match = search in d["employee_name"].lower()
+                    if not (code_match or name_match):
+                        continue
+
+                all_requests.append(d)
+
+        # Sort: pending first, then submitted_on desc
+        # Using stable sort:
+        all_requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        all_requests.sort(key=lambda x: 0 if x.get("status") == "Pending" else 1)
+
+        total_employees = sum(1 for u in users_dict.values() if u.get("role") == "employee")
+
+        stats = {
+            "total_employees": total_employees,
+            "pending": pending_cnt,
+            "approved": approved_cnt,
+            "rejected": rejected_cnt
+        }
+
+        return render_template(
+            "manager_requests.html",
+            all_requests=all_requests,
+            stats=stats
         )
-    else:
-        c.execute(
-            """
-            SELECT
-                lr.*,
-                u.full_name AS employee_name,
-                u.employee_id AS employee_code,
-                u.casual_leave,
-                u.sick_leave,
-                u.annual_leave
-            FROM leave_requests lr
-            JOIN users u
-            ON lr.employee_id = u.id
-            WHERE
-                u.role='employee'
-                AND lr.approval_level='manager'
-            ORDER BY
-                CASE
-                    WHEN lr.status='Pending' THEN 0
-                    ELSE 1
-                END,
-                lr.submitted_on DESC
-            """
-        )
-    all_requests = c.fetchall()
-    c.execute(
-        """
-        SELECT
-            (SELECT COUNT(*) FROM users WHERE role='employee') AS total_employees,
-            (SELECT COUNT(*)
-             FROM leave_requests
-             WHERE status='Pending'
-             AND approval_level='manager') AS pending,
-            (SELECT COUNT(*)
-             FROM leave_requests
-             WHERE status='Approved'
-             AND approval_level='manager') AS approved,
-            (SELECT COUNT(*)
-             FROM leave_requests
-             WHERE status='Rejected'
-             AND approval_level='manager') AS rejected
-        """
-    )
-    stats = c.fetchone()
-    conn.close()
-    return render_template(
-        "manager_requests.html",
-        all_requests=all_requests,
-        stats=stats
-    )
+    except Exception as e:
+        print(f"Manager requests loading error: {e}")
+        flash("Could not load employee requests.", "error")
+        return redirect(url_for("manager_dashboard"))
+
+
 # -----------------------------------------
 # MANAGER LEAVE DASHBOARD
 # -----------------------------------------
@@ -1084,40 +938,36 @@ def manager_leave():
         return redirect(url_for("login"))
     if session["role"] != "manager":
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id=%s
-        """,
-        (session["user_id"],)
-    )
-    user = c.fetchone()
-    c.execute(
-        """
-        SELECT *
-        FROM leave_requests
-        WHERE employee_id=%s
-        ORDER BY submitted_on DESC
-        """,
-        (session["user_id"],)
-    )
-    requests = c.fetchall()
-    conn.close()
-    today = date.today()
-    max_date = (
-        today + timedelta(days=180)
-    ).strftime("%Y-%m-%d")
-    today = today.strftime("%Y-%m-%d")
-    return render_template(
-        "manager_leave.html",
-        requests=requests,
-        user=user,
-        today=today,
-        max_date=max_date
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        user_doc = db_firestore.collection("users").document(session["user_id"]).get()
+        user = to_dict_with_id(user_doc)
+
+        docs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
+        requests = [to_dict_with_id(d) for d in docs]
+        requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+
+        today = date.today()
+        max_date = (today + timedelta(days=180)).strftime("%Y-%m-%d")
+        today = today.strftime("%Y-%m-%d")
+
+        return render_template(
+            "manager_leave.html",
+            requests=requests,
+            user=user,
+            today=today,
+            max_date=max_date
+        )
+    except Exception as e:
+        print(f"Manager leave portal error: {e}")
+        flash("Could not load dashboard data.", "error")
+        return redirect(url_for("manager_dashboard"))
+
+
 # -----------------------------------------
 # ADMIN DASHBOARD
 # -----------------------------------------
@@ -1127,239 +977,178 @@ def admin_dashboard():
         return redirect(url_for("login"))
     if session.get("role") != "admin":
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id = %s
-        """,
-        (session["user_id"],)
-    )
-    admin = c.fetchone()
-    c.execute(
-        """
-        SELECT *
-        FROM users
-        ORDER BY
-            CASE role
-                WHEN 'admin' THEN 1
-                WHEN 'manager' THEN 2
-                WHEN 'employee' THEN 3
-            END,
-            full_name
-        """
-    )
-    users = c.fetchall()
-    c.execute(
-        """
-        SELECT
-            (SELECT COUNT(*)
-             FROM users
-             WHERE role='employee')
-             AS total_employees,
-            (SELECT COUNT(*)
-             FROM users
-             WHERE role='manager')
-             AS total_managers,
-            (SELECT COUNT(*)
-             FROM leave_requests
-             WHERE approval_level='manager'
-             AND status='Pending')
-             AS employee_pending,
-            (SELECT COUNT(*)
-             FROM leave_requests
-             WHERE approval_level='manager'
-             AND status='Approved')
-             AS employee_approved,
-            (SELECT COUNT(*)
-             FROM leave_requests
-             WHERE approval_level='manager'
-             AND status='Rejected')
-             AS employee_rejected,
-            (SELECT COUNT(*)
-             FROM leave_requests
-             WHERE approval_level='admin'
-             AND status='Pending')
-             AS manager_pending,
-            (SELECT COUNT(*)
-             FROM leave_requests
-             WHERE approval_level='admin'
-             AND status='Approved')
-             AS manager_approved,
-            (SELECT COUNT(*)
-             FROM leave_requests
-             WHERE approval_level='admin'
-             AND status='Rejected')
-             AS manager_rejected
-        """
-    )
-    stats = c.fetchone()
-    c.execute(
-        """
-        SELECT
-            lr.id,
-            lr.leave_type,
-            lr.start_date,
-            lr.end_date,
-            lr.status,
-            u.full_name
-        FROM leave_requests lr
-        JOIN users u
-        ON lr.employee_id = u.id
-        WHERE lr.approval_level='admin'
-        ORDER BY lr.submitted_on DESC
-        LIMIT 5
-        """
-    )
-    recent_manager_requests = c.fetchall()
-    conn.close()
-    return render_template(
-        "admin_dashboard.html",
-        admin=admin,
-        users=users,
-        stats=stats,
-        recent_manager_requests=recent_manager_requests
-    )
-@app.route(
-    "/add_manager",
-    methods=["GET", "POST"]
-)
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        admin_doc = db_firestore.collection("users").document(session["user_id"]).get()
+        admin = to_dict_with_id(admin_doc)
+
+        users_docs = db_firestore.collection("users").get()
+        users = [to_dict_with_id(u) for u in users_docs]
+
+        role_order = {"admin": 1, "manager": 2, "employee": 3}
+        users.sort(key=lambda x: (role_order.get(x.get("role", "employee"), 3), x.get("full_name", "").lower()))
+
+        total_employees = sum(1 for u in users if u.get("role") == "employee")
+        total_managers = sum(1 for u in users if u.get("role") == "manager")
+
+        reqs_docs = db_firestore.collection("leave_requests").get()
+        reqs = [to_dict_with_id(r) for r in reqs_docs]
+
+        employee_pending = sum(1 for r in reqs if r.get("approval_level") == "manager" and r.get("status") == "Pending")
+        employee_approved = sum(1 for r in reqs if r.get("approval_level") == "manager" and r.get("status") == "Approved")
+        employee_rejected = sum(1 for r in reqs if r.get("approval_level") == "manager" and r.get("status") == "Rejected")
+
+        manager_pending = sum(1 for r in reqs if r.get("approval_level") == "admin" and r.get("status") == "Pending")
+        manager_approved = sum(1 for r in reqs if r.get("approval_level") == "admin" and r.get("status") == "Approved")
+        manager_rejected = sum(1 for r in reqs if r.get("approval_level") == "admin" and r.get("status") == "Rejected")
+
+        stats = {
+            "total_employees": total_employees,
+            "total_managers": total_managers,
+            "employee_pending": employee_pending,
+            "employee_approved": employee_approved,
+            "employee_rejected": employee_rejected,
+            "manager_pending": manager_pending,
+            "manager_approved": manager_approved,
+            "manager_rejected": manager_rejected
+        }
+
+        # Recent manager requests
+        users_dict = {u["id"]: u for u in users}
+        recent_manager_requests = []
+        for r in reqs:
+            if r.get("approval_level") == "admin":
+                emp_id = r.get("employee_id")
+                emp_data = users_dict.get(emp_id, {})
+                r["full_name"] = emp_data.get("full_name", "Unknown")
+                recent_manager_requests.append(r)
+
+        recent_manager_requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        recent_manager_requests = recent_manager_requests[:5]
+
+        return render_template(
+            "admin_dashboard.html",
+            admin=admin,
+            users=users,
+            stats=stats,
+            recent_manager_requests=recent_manager_requests
+        )
+    except Exception as e:
+        print(f"Admin dashboard loading error: {e}")
+        flash("Could not load admin dashboard.", "error")
+        return redirect(url_for("home"))
+
+
+@app.route("/add_manager", methods=["GET", "POST"])
 def add_manager():
     if "user_id" not in session:
         return redirect(url_for("login"))
     if session["role"] != "admin":
         return redirect(url_for("login"))
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("admin_dashboard"))
+
     if request.method == "POST":
-        conn = get_db()
-        c = conn.cursor()
+        employee_id = request.form["employee_id"].strip().upper()
+        full_name = request.form["full_name"]
+        email = request.form["email"]
+        phone = request.form["phone"]
+        department = request.form["department"]
+
         try:
-            c.execute(
-                """
-                INSERT INTO users
-                (
-                    employee_id,
-                    password,
-                    full_name,
-                    email,
-                    phone,
-                    department,
-                    role,
-                    must_change_password
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    request.form["employee_id"]
-                    .strip()
-                    .upper(),
-                    generate_password_hash(
-                        "Manager@123"
-                    ),
-                    request.form["full_name"],
-                    request.form["email"],
-                    request.form["phone"],
-                    request.form["department"],
-                    "manager",
-                    1
-                )
-            )
-            conn.commit()
-            flash(
-                "Manager created successfully.",
-                "success"
-            )
-            return redirect(
-                url_for("admin_dashboard")
-            )
-        except psycopg2.IntegrityError:
-            conn.rollback()
-            flash(
-                "Employee ID already exists.",
-                "error"
-            )
-            return redirect(
-                url_for("add_manager")
-            )
-        finally:
-            conn.close()
-    return render_template(
-        "add_manager.html"
-    )
+            # Check duplicate ID
+            existing = db_firestore.collection("users").where("employee_id", "==", employee_id).limit(1).get()
+            if len(existing) > 0:
+                flash("Employee ID already exists.", "error")
+                return redirect(url_for("add_manager"))
+
+            db_firestore.collection("users").add({
+                "employee_id": employee_id,
+                "password": generate_password_hash("Manager@123"),
+                "full_name": full_name,
+                "email": email,
+                "phone": phone,
+                "department": department,
+                "designation": "Manager",
+                "role": "manager",
+                "casual_leave": 6,
+                "sick_leave": 6,
+                "annual_leave": 12,
+                "is_active": 1,
+                "must_change_password": 1
+            })
+            flash("Manager created successfully.", "success")
+            return redirect(url_for("admin_dashboard"))
+        except Exception as e:
+            print(f"Add manager error: {e}")
+            flash("Could not add manager. Please try again.", "error")
+            return redirect(url_for("add_manager"))
+
+    return render_template("add_manager.html")
+
+
 # -----------------------------------------
 # ADMIN - EDIT EMPLOYEE DETAILS
 # -----------------------------------------
-@app.route("/edit_employee/<int:user_id>", methods=["GET", "POST"])
+@app.route("/edit_employee/<string:user_id>", methods=["GET", "POST"])
 def edit_employee(user_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
     if session.get("role") != "admin":
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id=%s
-        """,
-        (user_id,)
-    )
-    user = c.fetchone()
-    if not user:
-        conn.close()
-        flash("User not found.", "error")
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
         return redirect(url_for("admin_dashboard"))
-    if user["role"] == "admin":
-        conn.close()
-        flash("Admin account cannot be edited.", "error")
+
+    try:
+        user_ref = db_firestore.collection("users").document(user_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            flash("User not found.", "error")
+            return redirect(url_for("admin_dashboard"))
+
+        user = to_dict_with_id(user_doc)
+        if user["role"] == "admin":
+            flash("Admin account cannot be edited.", "error")
+            return redirect(url_for("admin_dashboard"))
+
+        if request.method == "POST":
+            full_name = request.form["full_name"]
+            email = request.form["email"]
+            phone = request.form["phone"]
+            department = request.form["department"]
+            designation = request.form["designation"]
+            casual_leave = int(request.form["casual_leave"])
+            sick_leave = int(request.form["sick_leave"])
+            annual_leave = int(request.form["annual_leave"])
+
+            user_ref.update({
+                "full_name": full_name,
+                "email": email,
+                "phone": phone,
+                "department": department,
+                "designation": designation,
+                "casual_leave": casual_leave,
+                "sick_leave": sick_leave,
+                "annual_leave": annual_leave
+            })
+            flash("User updated successfully.", "success")
+            return redirect(url_for("admin_dashboard"))
+
+        return render_template("admin_edit_user.html", user=user, admin_edit=True)
+    except Exception as e:
+        print(f"Edit employee error: {e}")
+        flash("An error occurred.", "error")
         return redirect(url_for("admin_dashboard"))
-    if request.method == "POST":
-        full_name = request.form["full_name"]
-        email = request.form["email"]
-        phone = request.form["phone"]
-        department = request.form["department"]
-        designation = request.form["designation"]
-        casual_leave = request.form["casual_leave"]
-        sick_leave = request.form["sick_leave"]
-        annual_leave = request.form["annual_leave"]
-        c.execute(
-            """
-            UPDATE users
-            SET
-                full_name=%s,
-                email=%s,
-                phone=%s,
-                department=%s,
-                designation=%s,
-                casual_leave=%s,
-                sick_leave=%s,
-                annual_leave=%s
-            WHERE id=%s
-            """,
-            (
-                full_name,
-                email,
-                phone,
-                department,
-                designation,
-                casual_leave,
-                sick_leave,
-                annual_leave,
-                user_id
-            )
-        )
-        conn.commit()
-        conn.close()
-        flash("User updated successfully.", "success")
-        return redirect(url_for("admin_dashboard"))
-    conn.close()
-    return render_template(
-        "admin_edit_user.html",
-        user=user,
-        admin_edit=True
-    )
+
+
 # -----------------------------------------
 # ADMIN - MANAGER LEAVE REQUESTS
 # -----------------------------------------
@@ -1369,407 +1158,279 @@ def admin_requests():
         return redirect(url_for("login"))
     if session.get("role") != "admin":
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("""
-        SELECT
-            lr.*,
-            u.full_name,
-            u.employee_id
-        FROM leave_requests lr
-        JOIN users u
-        ON lr.employee_id = u.id
-        WHERE
-            lr.approval_level='admin'
-            AND lr.status='Pending'
-        ORDER BY lr.submitted_on DESC
-    """)
-    pending_requests = c.fetchall()
-    c.execute("""
-        SELECT
-            lr.*,
-            u.full_name,
-            u.employee_id
-        FROM leave_requests lr
-        JOIN users u
-        ON lr.employee_id = u.id
-        WHERE
-            lr.approval_level='admin'
-            AND lr.status IN ('Approved','Rejected')
-        ORDER BY lr.decision_date DESC
-        LIMIT 10
-    """)
-    decision_history = c.fetchall()
-    c.execute("""
-        SELECT
-            COUNT(*) AS pending_manager_requests
-        FROM leave_requests
-        WHERE
-            approval_level='admin'
-            AND status='Pending'
-    """)
-    stats = c.fetchone()
-    conn.close()
-    return render_template(
-        "admin_requests.html",
-        pending_requests=pending_requests,
-        decision_history=decision_history,
-        stats=stats
-    )
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        users_docs = db_firestore.collection("users").get()
+        users_dict = {u.id: to_dict_with_id(u) for u in users_docs}
+
+        reqs_docs = db_firestore.collection("leave_requests").get()
+
+        pending_requests = []
+        decision_history = []
+        pending_cnt = 0
+
+        for doc in reqs_docs:
+            r = to_dict_with_id(doc)
+            if r.get("approval_level") == "admin":
+                emp_id = r.get("employee_id")
+                emp_data = users_dict.get(emp_id, {})
+                r["full_name"] = emp_data.get("full_name", "Unknown")
+                # Set employee_id as the employee string code (e.g. MGR001) for the template display
+                r["employee_id"] = emp_data.get("employee_id", "Unknown")
+
+                if r.get("status") == "Pending":
+                    pending_cnt += 1
+                    pending_requests.append(r)
+                else:
+                    decision_history.append(r)
+
+        # Sort lists
+        pending_requests.sort(key=lambda x: x.get("submitted_on", ""), reverse=True)
+        decision_history.sort(key=lambda x: x.get("decision_date", ""), reverse=True)
+        decision_history = decision_history[:10]
+
+        stats = {
+            "pending_manager_requests": pending_cnt
+        }
+
+        return render_template(
+            "admin_requests.html",
+            pending_requests=pending_requests,
+            decision_history=decision_history,
+            stats=stats
+        )
+    except Exception as e:
+        print(f"Admin requests loading error: {e}")
+        flash("Could not load requests.", "error")
+        return redirect(url_for("admin_dashboard"))
+
+
 # -----------------------------------------
 # TOGGLE USER STATUS
 # -----------------------------------------
-@app.route("/toggle_user/<int:user_id>")
+@app.route("/toggle_user/<string:user_id>")
 def toggle_user(user_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
     if session["role"] != "admin":
         return redirect(url_for("login"))
+
     if user_id == session["user_id"]:
-        flash(
-            "You cannot deactivate your own account.",
-            "error"
-        )
-        return redirect(
-            url_for("admin_dashboard")
-        )
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT is_active
-        FROM users
-        WHERE id=%s
-        """,
-        (user_id,)
-    )
-    user = c.fetchone()
-    if user:
-        new_status = 0 if user["is_active"] else 1
-        c.execute(
-            """
-            UPDATE users
-            SET is_active=%s
-            WHERE id=%s
-            """,
-            (new_status, user_id)
-        )
-        conn.commit()
-    conn.close()
-    flash(
-        "User status updated successfully.",
-        "success"
-    )
-    return redirect(
-        url_for("admin_dashboard")
-    )
+        flash("You cannot deactivate your own account.", "error")
+        return redirect(url_for("admin_dashboard"))
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("admin_dashboard"))
+
+    try:
+        user_ref = db_firestore.collection("users").document(user_id)
+        user_doc = user_ref.get()
+        if user_doc.exists:
+            current_status = user_doc.to_dict().get("is_active", 1)
+            new_status = 0 if current_status == 1 else 1
+            user_ref.update({"is_active": new_status})
+            flash("User status updated successfully.", "success")
+        else:
+            flash("User not found.", "error")
+    except Exception as e:
+        print(f"Toggle user error: {e}")
+        flash("Could not update user status.", "error")
+
+    return redirect(url_for("admin_dashboard"))
+
+
 # -----------------------------------------
-# APPROVE / REJECT LEAVE
+# APPROVE / REJECT LEAVE (MANAGER ACTION)
 # -----------------------------------------
-@app.route("/action/<int:request_id>", methods=["POST"])
+@app.route("/action/<string:request_id>", methods=["POST"])
 def take_action(request_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
     if session["role"] != "manager":
         return redirect(url_for("login"))
-    if request.form["action"] not in [
-        "Approved",
-        "Rejected"
-    ]:
-        flash(
-            "Invalid action.",
-            "error"
-        )
-        return redirect(
-            url_for("manager_requests")
-        )
-    action = request.form["action"]
+
+    action = request.form.get("action")
+    if action not in ["Approved", "Rejected"]:
+        flash("Invalid action.", "error")
+        return redirect(url_for("manager_requests"))
+
     comment = request.form.get("comment", "")
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT status, approval_level
-        FROM leave_requests
-        WHERE id=%s
-        """,
-        (request_id,)
-    )
-    current = c.fetchone()
-    if not current:
-        flash(
-            "Leave request not found.",
-            "error"
-        )
-        conn.close()
-        return redirect(
-            url_for("manager_requests")
-        )
-    if current["approval_level"] != "manager":
-        flash(
-            "Invalid approval request.",
-            "error"
-        )
-        conn.close()
-        return redirect(
-            url_for("manager_requests")
-        )
-    if current["status"] != "Pending":
-        flash(
-            "Request already processed.",
-            "error"
-        )
-        conn.close()
-        return redirect(
-            url_for("manager_requests")
-        )
-    decision_date = datetime.now().strftime(
-        "%Y-%m-%d %H:%M"
-    )
-    if action == "Approved":
-        c.execute(
-            """
-            SELECT
-                employee_id,
-                leave_type,
-                total_days
-            FROM leave_requests
-            WHERE id=%s
-            """,
-            (request_id,)
-        )
-        leave = c.fetchone()
-        if leave:
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("manager_requests"))
+
+    try:
+        req_ref = db_firestore.collection("leave_requests").document(request_id)
+        req_doc = req_ref.get()
+        if not req_doc.exists:
+            flash("Leave request not found.", "error")
+            return redirect(url_for("manager_requests"))
+
+        leave = to_dict_with_id(req_doc)
+
+        if leave["approval_level"] != "manager":
+            flash("Invalid approval request.", "error")
+            return redirect(url_for("manager_requests"))
+
+        if leave["status"] != "Pending":
+            flash("Request already processed.", "error")
+            return redirect(url_for("manager_requests"))
+
+        decision_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        if action == "Approved":
+            leave_type = leave["leave_type"]
+            total_days = leave["total_days"]
+            emp_id = leave["employee_id"]
+
+            user_ref = db_firestore.collection("users").document(emp_id)
+            user_doc = user_ref.get()
+            if not user_doc.exists:
+                flash("Employee user not found.", "error")
+                return redirect(url_for("manager_requests"))
+
+            user = to_dict_with_id(user_doc)
             leave_map = {
                 "Casual Leave": "casual_leave",
                 "Sick Leave": "sick_leave",
                 "Annual Leave": "annual_leave"
             }
-            if leave["leave_type"] in leave_map:
-                column = leave_map[
-                    leave["leave_type"]
-                ]
-                c.execute(
-                    """
-                    SELECT *
-                    FROM users
-                    WHERE id=%s
-                    """,
-                    (leave["employee_id"],)
-                )
-                employee = c.fetchone()
-                if employee[column] < leave["total_days"]:
-                    flash(
-                        "Insufficient leave balance.",
-                        "error"
-                    )
-                    conn.close()
-                    return redirect(
-                        url_for("manager_requests")
-                    )
-                c.execute(
-                    f"""
-                    UPDATE users
-                    SET {column} = {column} - %s
-                    WHERE id=%s
-                    """,
-                    (
-                        leave["total_days"],
-                        leave["employee_id"]
-                    )
-                )
-    c.execute(
-        """
-        UPDATE leave_requests
-        SET status=%s,
-            manager_comment=%s,
-            decision_date=%s,
-            approved_by=%s
-        WHERE id=%s
-        """,
-        (
-            action,
-            comment,
-            decision_date,
-            session["user_id"],
-            request_id
-        )
-    )
-    # Fetch employee info for notification
-    try:
-        conn3 = get_db()
-        c3 = conn3.cursor()
-        c3.execute("SELECT employee_id, leave_type FROM leave_requests WHERE id=%s", (request_id,))
-        lr = c3.fetchone()
-        conn3.close()
-        if lr:
+
+            if leave_type in leave_map:
+                col = leave_map[leave_type]
+                current_balance = user.get(col, 0)
+
+                if current_balance < total_days:
+                    flash("Insufficient leave balance for the employee.", "error")
+                    return redirect(url_for("manager_requests"))
+
+                # Decrement balance
+                user_ref.update({col: current_balance - total_days})
+
+        # Update Request Status
+        req_ref.update({
+            "status": action,
+            "manager_comment": comment,
+            "decision_date": decision_date,
+            "approved_by": session["user_id"]
+        })
+
+        # Send notification to Employee
+        try:
             send_notification(
-                lr["employee_id"],
+                leave["employee_id"],
                 f"Leave {action}",
-                f"Your {lr['leave_type']} request has been {action.lower()} by the manager.",
+                f"Your {leave['leave_type']} request has been {action.lower()} by the manager.",
                 "success" if action == "Approved" else "error"
             )
-    except Exception as e:
-        print(f"Employee notification error: {e}")
+        except Exception as e_notif:
+            print(f"Employee notification error: {e_notif}")
 
-    conn.commit()
-    conn.close()
-    flash(
-        f"Request {action} successfully!",
-        "success"
-    )
-    return redirect(
-        url_for("manager_requests")
-    )
+        flash(f"Request {action} successfully!", "success")
+    except Exception as e:
+        print(f"Approve/reject error: {e}")
+        flash("Could not process leave request.", "error")
+
+    return redirect(url_for("manager_requests"))
+
+
 # -----------------------------------------
 # ADMIN APPROVE / REJECT MANAGER LEAVE
 # -----------------------------------------
-@app.route(
-    "/admin_action/<int:request_id>",
-    methods=["POST"]
-)
+@app.route("/admin_action/<string:request_id>", methods=["POST"])
 def admin_action(request_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
     if session["role"] != "admin":
         return redirect(url_for("login"))
-    if request.form["action"] not in [
-        "Approved",
-        "Rejected"
-    ]:
-        flash(
-            "Invalid action.",
-            "error"
-        )
-        return redirect(
-            url_for("manager_requests")
-        )
-    action = request.form["action"]
+
+    action = request.form.get("action")
+    if action not in ["Approved", "Rejected"]:
+        flash("Invalid action.", "error")
+        return redirect(url_for("admin_requests"))
+
     comment = request.form.get("comment", "")
-    conn = get_db()
-    c = conn.cursor()
-    c.execute(
-        """
-        SELECT status, approval_level
-        FROM leave_requests
-        WHERE id=%s
-        """,
-        (request_id,)
-    )
-    current = c.fetchone()
-    if not current:
-        flash(
-            "Leave request not found.",
-            "error"
-        )
-        conn.close()
-        return redirect(
-            url_for("admin_requests")
-        )
-    if current["approval_level"] != "admin":
-        flash(
-            "Invalid approval request.",
-            "error"
-        )
-        conn.close()
-        return redirect(
-            url_for("admin_requests")
-        )
-    if current["status"] != "Pending":
-        flash(
-            "Request already processed.",
-            "error"
-        )
-        conn.close()
-        return redirect(
-            url_for("admin_requests")
-        )
-    decision_date = datetime.now().strftime(
-        "%Y-%m-%d %H:%M"
-    )
-    c.execute(
-        """
-        UPDATE leave_requests
-        SET
-            status=%s,
-            manager_comment=%s,
-            decision_date=%s,
-            approved_by=%s
-        WHERE id=%s
-        """,
-        (
-            action,
-            comment,
-            decision_date,
-            session["user_id"],
-            request_id
-        )
-    )
-    if action == "Approved":
-        c.execute(
-            """
-            SELECT
-                employee_id,
-                leave_type,
-                total_days
-            FROM leave_requests
-            WHERE id=%s
-            """,
-            (request_id,)
-        )
-        leave = c.fetchone()
-        leave_map = {
-            "Casual Leave": "casual_leave",
-            "Sick Leave": "sick_leave",
-            "Annual Leave": "annual_leave"
-        }
-        if leave["leave_type"] in leave_map:
-            column = leave_map[
-                leave["leave_type"]
-            ]
-            c.execute(
-                f"""
-                UPDATE users
-                SET {column} =
-                    CASE
-                        WHEN {column} - %s < 0
-                        THEN 0
-                        ELSE {column} - %s
-                    END
-                WHERE id=%s
-                """,
-                (
-                    leave["total_days"],
-                    leave["total_days"],
-                    leave["employee_id"]
-                )
-            )
-    # Notify manager about their leave decision
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("admin_requests"))
+
     try:
-        conn4 = get_db()
-        c4 = conn4.cursor()
-        c4.execute("SELECT employee_id, leave_type FROM leave_requests WHERE id=%s", (request_id,))
-        lr2 = c4.fetchone()
-        conn4.close()
-        if lr2:
+        req_ref = db_firestore.collection("leave_requests").document(request_id)
+        req_doc = req_ref.get()
+        if not req_doc.exists:
+            flash("Leave request not found.", "error")
+            return redirect(url_for("admin_requests"))
+
+        leave = to_dict_with_id(req_doc)
+
+        if leave["approval_level"] != "admin":
+            flash("Invalid approval request.", "error")
+            return redirect(url_for("admin_requests"))
+
+        if leave["status"] != "Pending":
+            flash("Request already processed.", "error")
+            return redirect(url_for("admin_requests"))
+
+        decision_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        if action == "Approved":
+            leave_type = leave["leave_type"]
+            total_days = leave["total_days"]
+            emp_id = leave["employee_id"]
+
+            user_ref = db_firestore.collection("users").document(emp_id)
+            user_doc = user_ref.get()
+            if not user_doc.exists:
+                flash("Manager user not found.", "error")
+                return redirect(url_for("admin_requests"))
+
+            user = to_dict_with_id(user_doc)
+            leave_map = {
+                "Casual Leave": "casual_leave",
+                "Sick Leave": "sick_leave",
+                "Annual Leave": "annual_leave"
+            }
+
+            if leave_type in leave_map:
+                col = leave_map[leave_type]
+                current_balance = user.get(col, 0)
+                new_balance = max(0, current_balance - total_days)
+                user_ref.update({col: new_balance})
+
+        # Update Request Status
+        req_ref.update({
+            "status": action,
+            "manager_comment": comment,
+            "decision_date": decision_date,
+            "approved_by": session["user_id"]
+        })
+
+        # Send notification to Manager
+        try:
             send_notification(
-                lr2["employee_id"],
+                leave["employee_id"],
                 f"Leave {action}",
-                f"Your {lr2['leave_type']} request has been {action.lower()} by the admin.",
+                f"Your {leave['leave_type']} request has been {action.lower()} by the admin.",
                 "success" if action == "Approved" else "error"
             )
-    except Exception as e:
-        print(f"Admin->manager notification error: {e}")
+        except Exception as e_notif:
+            print(f"Manager notification error: {e_notif}")
 
-    conn.commit()
-    conn.close()
-    flash(
-        f"Manager leave request {action.lower()} successfully.",
-        "success"
-    )
-    return redirect(
-        url_for("admin_requests")
-    )
+        flash(f"Manager leave request {action.lower()} successfully.", "success")
+    except Exception as e:
+        print(f"Admin action error: {e}")
+        flash("Could not process request.", "error")
+
+    return redirect(url_for("admin_requests"))
+
+
 # -----------------------------------------
 # EXPORT CSV REPORT
 # -----------------------------------------
@@ -1779,73 +1440,51 @@ def export_csv():
         return redirect(url_for("login"))
     if session["role"] != "manager":
         return redirect(url_for("login"))
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("""
-        SELECT
-            u.full_name,
-            u.employee_id,
-            lr.leave_type,
-            lr.start_date,
-            lr.end_date,
-            lr.total_days,
-            lr.status,
-            lr.manager_comment,
-            lr.decision_date
-        FROM leave_requests lr
-        JOIN users u
-        ON lr.employee_id = u.id
-        WHERE u.role='employee'
-    """)
-    data = c.fetchall()
-    conn.close()
-    csv_data = "Employee Name,Employee ID,Leave Type,Start Date,End Date,Days,Status,Manager Comment,Decision Date\n"
-    for row in data:
-        csv_data += (
-            f"{row['full_name']},"
-            f"{row['employee_id']},"
-            f"{row['leave_type']},"
-            f"{row['start_date']},"
-            f"{row['end_date']},"
-            f"{row['total_days']},"
-            f"{row['status']},"
-            f"{row['manager_comment']},"
-            f"{row['decision_date']}\n"
-        )
-    return Response(
-        csv_data,
-        mimetype="text/csv",
-        headers={
-            "Content-Disposition":
-            "attachment; filename=leave_report.csv"
-        }
-    )
-# -----------------------------------------
 
-# -----------------------------------------
-# FIREBASE ADMIN SETUP
-# -----------------------------------------
-# Initialize Firebase Admin SDK using environment variable
-# On Render: set FIREBASE_CREDENTIALS env var with your service account JSON content
-import json
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("manager_dashboard"))
 
-firebase_credentials_json = os.environ.get("FIREBASE_CREDENTIALS")
-if firebase_credentials_json and not firebase_admin._apps:
     try:
-        cred_dict = json.loads(firebase_credentials_json)
-        cred = credentials.Certificate(cred_dict)
-        firebase_admin.initialize_app(cred)
-        db_firestore = firestore.client()
-        FIREBASE_ENABLED = True
+        users_docs = db_firestore.collection("users").get()
+        users_dict = {u.id: to_dict_with_id(u) for u in users_docs}
+
+        reqs_docs = db_firestore.collection("leave_requests").get()
+
+        csv_data = "Employee Name,Employee ID,Leave Type,Start Date,End Date,Days,Status,Manager Comment,Decision Date\n"
+        for doc in reqs_docs:
+            lr = to_dict_with_id(doc)
+            emp_id = lr.get("employee_id")
+            emp_data = users_dict.get(emp_id, {})
+            if emp_data.get("role") == "employee":
+                csv_data += (
+                    f"{emp_data.get('full_name', 'Unknown')},"
+                    f"{emp_data.get('employee_id', 'Unknown')},"
+                    f"{lr.get('leave_type', '')},"
+                    f"{lr.get('start_date', '')},"
+                    f"{lr.get('end_date', '')},"
+                    f"{lr.get('total_days', 0)},"
+                    f"{lr.get('status', 'Pending')},"
+                    f"{lr.get('manager_comment', '')},"
+                    f"{lr.get('decision_date', '')}\n"
+                )
+
+        return Response(
+            csv_data,
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=leave_report.csv"
+            }
+        )
     except Exception as e:
-        print(f"Firebase Admin init failed: {e}")
-        db_firestore = None
-        FIREBASE_ENABLED = False
-else:
-    db_firestore = None
-    FIREBASE_ENABLED = False
+        print(f"CSV export error: {e}")
+        flash("Could not export leave data.", "error")
+        return redirect(url_for("manager_dashboard"))
 
 
+# -----------------------------------------
+# FIREBASE NOTIFICATIONS AND UTILS
+# -----------------------------------------
 def send_notification(user_id, title, message, notif_type="info"):
     """Save a notification to Firestore for a specific user."""
     if not FIREBASE_ENABLED or db_firestore is None:
@@ -1874,7 +1513,7 @@ def google_login():
     if not id_token:
         return jsonify({"success": False, "message": "No token provided."})
 
-    if not FIREBASE_ENABLED:
+    if not FIREBASE_ENABLED or db_firestore is None:
         return jsonify({"success": False, "message": "Google login is not configured on the server."})
 
     try:
@@ -1885,20 +1524,17 @@ def google_login():
         if not email:
             return jsonify({"success": False, "message": "Could not get email from Google account."})
 
-        # Check if this email exists in PostgreSQL
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE email=%s", (email,))
-        user = c.fetchone()
-        conn.close()
-
-        if not user:
+        # Check if user exists in Firestore
+        user_docs = db_firestore.collection("users").where("email", "==", email).limit(1).get()
+        if len(user_docs) == 0:
             return jsonify({
                 "success": False,
                 "message": f"No account found with email '{email}'. Please sign up first or use a different Google account."
             })
 
-        if user["is_active"] == 0:
+        user = to_dict_with_id(user_docs[0])
+
+        if user.get("is_active", 1) == 0:
             return jsonify({"success": False, "message": "Your account has been deactivated."})
 
         # Log the user in via Flask session
@@ -1936,11 +1572,11 @@ def get_notifications():
         return jsonify([])
 
     try:
+        # Avoid composite indices by filtering and then sorting in python
         notifs_ref = db_firestore.collection("notifications")\
             .where("user_id", "==", str(session["user_id"]))\
             .where("read", "==", False)\
-            .order_by("created_at", direction=firestore.Query.DESCENDING)\
-            .limit(10)
+            .limit(100)
 
         docs = notifs_ref.stream()
         notifications = []
@@ -1950,8 +1586,21 @@ def get_notifications():
                 "id": doc.id,
                 "title": d.get("title", ""),
                 "message": d.get("message", ""),
-                "type": d.get("type", "info")
+                "type": d.get("type", "info"),
+                # Store created_at for sorting; handle cases where ServerTimestamp is still pending local resolution
+                "created_at": d.get("created_at") or datetime.now()
             })
+
+        # Sort in python
+        notifications.sort(key=lambda x: x["created_at"], reverse=True)
+        # Limit to 10
+        notifications = notifications[:10]
+
+        # Strip internal timestamps before json output
+        for n in notifications:
+            if "created_at" in n:
+                del n["created_at"]
+
         return jsonify(notifications)
     except Exception as e:
         print(f"Get notifications error: {e}")
@@ -1976,57 +1625,25 @@ def mark_notifications_read():
 
         docs = notifs_ref.stream()
         batch = db_firestore.batch()
+        count = 0
         for doc in docs:
             batch.update(doc.reference, {"read": True})
-        batch.commit()
+            count += 1
+            if count >= 500:  # Firestore batch limits updates to 500
+                break
+        if count > 0:
+            batch.commit()
         return jsonify({"success": True})
     except Exception as e:
         print(f"Mark read error: {e}")
         return jsonify({"success": False})
 
+
 # START APPLICATION
 # -----------------------------------------
 init_db()
-conn = get_db()
-c = conn.cursor()
-try:
-    c.execute(
-        """
-        INSERT INTO users
-        (employee_id, password, full_name, role, must_change_password)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (employee_id) DO NOTHING
-        """,
-        (
-            "MGR001",
-            generate_password_hash("Manager@123"),
-            "System Manager",
-            "manager",
-            1
-        )
-    )
-    c.execute(
-        """
-        INSERT INTO users
-        (employee_id, password, full_name, role, must_change_password)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (employee_id) DO NOTHING
-        """,
-        (
-            "ADMIN001",
-            generate_password_hash("Admin@123"),
-            "System Administrator",
-            "admin",
-            1
-        )
-    )
-    conn.commit()
-except Exception as e:
-    print("Error:", e)
-    conn.rollback()
-finally:
-    conn.close()
+
 if __name__ == "__main__":
-    print("\n Employee Leave Portal Running")
+    print("\n Employee Leave Portal Running (Firebase Mode)")
     print("http://127.0.0.1:5000\n")
     app.run(host="0.0.0.0", port=5000)

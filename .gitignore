@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 leave_portal.db
 .env
+serviceAccountKey.json
+firebase-key.json
