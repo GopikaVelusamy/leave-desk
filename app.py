@@ -797,10 +797,23 @@ def submit_leave():
             "approval_level": approval_level
         })
 
-        # Notify appropriate role (admin for manager leaves, manager for employee leaves)
+        # Notify appropriate role (admin for manager leaves, manager for employee leaves of the same department)
         try:
-            target_role = "admin" if session["role"] == "manager" else "manager"
-            receivers = db_firestore.collection("users").where("role", "==", target_role).get()
+            if session["role"] == "manager":
+                # Manager leave requests notify admins
+                receivers = db_firestore.collection("users").where("role", "==", "admin").get()
+            else:
+                # Employee leave requests notify managers of the same department
+                emp_dept = user.get("department", "")
+                if emp_dept:
+                    receivers = db_firestore.collection("users")\
+                        .where("role", "==", "manager")\
+                        .where("department", "==", emp_dept)\
+                        .get()
+                else:
+                    # Fallback if employee has no department: notify all managers
+                    receivers = db_firestore.collection("users").where("role", "==", "manager").get()
+
             for rec in receivers:
                 send_notification(
                     rec.id,
