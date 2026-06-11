@@ -877,6 +877,7 @@ def manager_dashboard():
     try:
         user_doc = db_firestore.collection("users").document(session["user_id"]).get()
         user = to_dict_with_id(user_doc)
+        manager_dept = (user.get("department") or "").strip().lower()
 
         reqs_docs = db_firestore.collection("leave_requests").get()
         pending = 0
@@ -890,6 +891,14 @@ def manager_dashboard():
         for doc in reqs_docs:
             d = to_dict_with_id(doc)
             if d.get("approval_level") == "manager":
+                emp_id = d.get("employee_id")
+                emp_data = users_dict.get(emp_id, {})
+                emp_dept = (emp_data.get("department") or "").strip().lower()
+
+                # Filter by department
+                if emp_dept != manager_dept:
+                    continue
+
                 status = d.get("status", "Pending")
                 if status == "Pending":
                     pending += 1
@@ -898,8 +907,6 @@ def manager_dashboard():
                 elif status == "Rejected":
                     rejected += 1
 
-                emp_id = d.get("employee_id")
-                emp_data = users_dict.get(emp_id, {})
                 d["full_name"] = emp_data.get("full_name", "Unknown")
                 all_manager_requests.append(d)
 
@@ -907,7 +914,11 @@ def manager_dashboard():
         all_manager_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         recent_requests = all_manager_requests[:5]
 
-        total_employees = sum(1 for u in users_dict.values() if u.get("role") == "employee")
+        # Filter total employee count to match manager's department
+        total_employees = sum(
+            1 for u in users_dict.values()
+            if u.get("role") == "employee" and (u.get("department") or "").strip().lower() == manager_dept
+        )
 
         stats = {
             "pending": pending,
@@ -943,6 +954,10 @@ def manager_requests():
         return redirect(url_for("login"))
 
     try:
+        manager_doc = db_firestore.collection("users").document(session["user_id"]).get()
+        manager = to_dict_with_id(manager_doc)
+        manager_dept = (manager.get("department") or "").strip().lower()
+
         search = request.args.get("search", "").strip().lower()
 
         users_docs = db_firestore.collection("users").get()
@@ -958,6 +973,16 @@ def manager_requests():
         for doc in reqs_docs:
             d = to_dict_with_id(doc)
             if d.get("approval_level") == "manager":
+                emp_id = d.get("employee_id")
+                emp_data = users_dict.get(emp_id, {})
+                if emp_data.get("role") != "employee":
+                    continue
+
+                emp_dept = (emp_data.get("department") or "").strip().lower()
+                # Filter by department
+                if emp_dept != manager_dept:
+                    continue
+
                 status = d.get("status", "Pending")
                 if status == "Pending":
                     pending_cnt += 1
@@ -965,11 +990,6 @@ def manager_requests():
                     approved_cnt += 1
                 elif status == "Rejected":
                     rejected_cnt += 1
-
-                emp_id = d.get("employee_id")
-                emp_data = users_dict.get(emp_id, {})
-                if emp_data.get("role") != "employee":
-                    continue
 
                 d["employee_name"] = emp_data.get("full_name", "Unknown")
                 d["employee_code"] = emp_data.get("employee_id", "Unknown")
@@ -990,7 +1010,11 @@ def manager_requests():
         all_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         all_requests.sort(key=lambda x: 0 if x.get("status") == "Pending" else 1)
 
-        total_employees = sum(1 for u in users_dict.values() if u.get("role") == "employee")
+        # Filter total employee count to match manager's department
+        total_employees = sum(
+            1 for u in users_dict.values()
+            if u.get("role") == "employee" and (u.get("department") or "").strip().lower() == manager_dept
+        )
 
         stats = {
             "total_employees": total_employees,
@@ -1311,6 +1335,27 @@ def take_action(request_id):
 
         leave = to_dict_with_id(req_doc)
 
+        # Get manager's department
+        manager_doc = db_firestore.collection("users").document(session["user_id"]).get()
+        manager = to_dict_with_id(manager_doc)
+        manager_dept = (manager.get("department") or "").strip().lower()
+
+        # Get employee's department
+        emp_id = leave["employee_id"]
+        user_ref = db_firestore.collection("users").document(emp_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            flash("Employee user not found.", "error")
+            return redirect(url_for("manager_requests"))
+
+        user = to_dict_with_id(user_doc)
+        emp_dept = (user.get("department") or "").strip().lower()
+
+        # Enforce department match
+        if emp_dept != manager_dept:
+            flash("Unauthorized: You do not manage this employee's department.", "error")
+            return redirect(url_for("manager_requests"))
+
         if leave["approval_level"] != "manager":
             flash("Invalid approval request.", "error")
             return redirect(url_for("manager_requests"))
@@ -1324,15 +1369,6 @@ def take_action(request_id):
         if action == "Approved":
             leave_type = leave["leave_type"]
             total_days = leave["total_days"]
-            emp_id = leave["employee_id"]
-
-            user_ref = db_firestore.collection("users").document(emp_id)
-            user_doc = user_ref.get()
-            if not user_doc.exists:
-                flash("Employee user not found.", "error")
-                return redirect(url_for("manager_requests"))
-
-            user = to_dict_with_id(user_doc)
             leave_map = {
                 "Casual Leave": "casual_leave",
                 "Sick Leave": "sick_leave",
@@ -1483,6 +1519,10 @@ def export_csv():
         return redirect(url_for("manager_dashboard"))
 
     try:
+        manager_doc = db_firestore.collection("users").document(session["user_id"]).get()
+        manager = to_dict_with_id(manager_doc)
+        manager_dept = (manager.get("department") or "").strip().lower()
+
         users_docs = db_firestore.collection("users").get()
         users_dict = {u.id: to_dict_with_id(u) for u in users_docs}
 
@@ -1493,7 +1533,9 @@ def export_csv():
             lr = to_dict_with_id(doc)
             emp_id = lr.get("employee_id")
             emp_data = users_dict.get(emp_id, {})
-            if emp_data.get("role") == "employee":
+            emp_dept = (emp_data.get("department") or "").strip().lower()
+
+            if emp_data.get("role") == "employee" and emp_dept == manager_dept:
                 csv_data += (
                     f"{emp_data.get('full_name', 'Unknown')},"
                     f"{emp_data.get('employee_id', 'Unknown')},"
