@@ -17,17 +17,12 @@
   const styleBlock = document.createElement('style');
   styleBlock.id = 'dynamic-theme-style';
   styleBlock.innerHTML = `
-    :root {
-      --primary-color: ${theme.primary};
-      --secondary-color: ${theme.secondary};
-      --gradient: ${theme.gradient};
-    }
     nav { background: ${theme.gradient} !important; }
     .btn, .btn-submit, .login-btn, .signup-btn:hover { background: ${theme.gradient} !important; color: white !important; }
     .left-panel { background: ${theme.gradient} !important; }
     .action-btn, .view-all-btn, .edit-btn, .approve, .btn-approve { background: ${theme.secondary} !important; color: white !important; }
     .action-btn:hover, .view-all-btn:hover, .edit-btn:hover, .approve:hover, .btn-approve:hover { background: ${theme.primary} !important; }
-    .card h2, .right-panel h2, .card h1, .welcome-card h1, .hero-content h1 { color: ${theme.primary} !important; }
+    .card h2, .right-panel h2, .card h1, .welcome-card h1, .hero h1 { color: ${theme.primary} !important; }
     .stat-card.active { border-color: ${theme.secondary} !important; }
     .balance-card h3, .stat-card h2, .stat-box h1, .balance-card h3, .stat-card h3 { color: ${theme.secondary} !important; }
     .signup-link a, .links a, a { color: ${theme.secondary}; }
@@ -40,7 +35,7 @@
 <title>Leave Management Portal</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 
 <style>
 
@@ -50,422 +45,122 @@
     box-sizing:border-box;
 }
 
-body {
-    font-family: 'DM Sans', sans-serif;
-    background: #f5f8fc;
-    min-height: 100vh;
-    position: relative;
-    overflow-x: hidden;
-    display: flex;
-    flex-direction: column;
+body{
+    font-family:'DM Sans',sans-serif;
+    background:#f0f4f8;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
 }
 
-/* Background glowing blobs */
-.bg-blob-1, .bg-blob-2 {
-    position: absolute;
-    width: 600px;
-    height: 600px;
-    border-radius: 50%;
-    filter: blur(180px);
-    z-index: -1;
-    opacity: 0.25;
-    animation: floatBlob 15s ease-in-out infinite alternate;
+.page-wrapper{
+    display:flex;
+    width:860px;
+    min-height:500px;
+    border-radius:20px;
+    overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,0.15);
 }
 
-.bg-blob-1 {
-    top: -200px;
-    left: -150px;
-    background: var(--primary-color, #1a3a5c);
-}
+@media(max-width:768px){
 
-.bg-blob-2 {
-    bottom: -200px;
-    right: -150px;
-    background: var(--secondary-color, #2e6da4);
-    animation-delay: 3s;
-}
-
-@keyframes floatBlob {
-    0% { transform: translate(0, 0) scale(1); }
-    100% { transform: translate(80px, 40px) scale(1.15); }
-}
-
-.landing-container {
-    max-width: 1200px;
-    width: 100%;
-    margin: 0 auto;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 0 24px;
-}
-
-/* Navbar */
-.navbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 30px 0;
-    width: 100%;
-}
-
-.nav-logo {
-    font-family: 'DM Serif Display', serif;
-    font-size: 1.8rem;
-    color: var(--primary-color, #1a3a5c);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    text-decoration: none;
-}
-
-.nav-logo img {
-    height: 38px;
-    width: 38px;
-    object-fit: contain;
-    border-radius: 6px;
-    background: white;
-    padding: 2px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-}
-
-.nav-actions {
-    display: flex;
-    gap: 12px;
-}
-
-.nav-btn {
-    text-decoration: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    transition: all 0.3s ease;
-}
-
-.nav-btn.login {
-    background: transparent;
-    color: var(--primary-color, #1a3a5c);
-    border: 1px solid rgba(26, 58, 92, 0.15);
-}
-
-.nav-btn.login:hover {
-    background: rgba(26, 58, 92, 0.05);
-}
-
-.nav-btn.register {
-    background: var(--gradient, linear-gradient(135deg, #1a3a5c, #2e6da4));
-    color: white;
-}
-
-.nav-btn.register:hover {
-    box-shadow: 0 4px 15px rgba(26, 58, 92, 0.2);
-    transform: translateY(-1px);
-}
-
-/* Hero Section */
-.hero {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1.15fr 0.85fr;
-    gap: 60px;
-    align-items: center;
-    padding: 50px 0 80px 0;
-}
-
-.hero-content h1 {
-    font-family: 'DM Serif Display', serif;
-    font-size: 3.8rem;
-    line-height: 1.12;
-    margin-bottom: 20px;
-    background: var(--gradient, linear-gradient(135deg, #1a3a5c, #2e6da4));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-weight: normal;
-}
-
-.hero-content p {
-    font-size: 1.15rem;
-    color: #64748b;
-    line-height: 1.65;
-    margin-bottom: 35px;
-}
-
-.features-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-    margin-bottom: 40px;
-}
-
-.feat-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 0.95rem;
-    color: #475569;
-    font-weight: 500;
-}
-
-.feat-dot {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    border: 2px solid var(--primary-color, #1a3a5c);
-    color: var(--primary-color, #1a3a5c);
-    flex-shrink: 0;
-}
-
-.feat-dot svg {
-    width: 14px;
-    height: 14px;
-}
-
-.hero-actions {
-    display: flex;
-    gap: 16px;
-}
-
-.hero-btn {
-    text-decoration: none;
-    padding: 16px 36px;
-    border-radius: 12px;
-    font-size: 1.05rem;
-    font-weight: 600;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    display: inline-block;
-}
-
-.hero-btn.primary {
-    background: var(--gradient, linear-gradient(135deg, #1a3a5c, #2e6da4));
-    color: white;
-    box-shadow: 0 10px 25px rgba(26, 58, 92, 0.15);
-}
-
-.hero-btn.primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 15px 30px rgba(26, 58, 92, 0.25);
-}
-
-.hero-btn.secondary {
-    background: white;
-    color: var(--primary-color, #1a3a5c);
-    border: 2px solid var(--primary-color, #1a3a5c);
-}
-
-.hero-btn.secondary:hover {
-    background: var(--primary-color, #1a3a5c);
-    color: white !important;
-    transform: translateY(-3px);
-    box-shadow: 0 10px 20px rgba(26, 58, 92, 0.1);
-}
-
-/* Dashboard Preview (Right column) */
-.hero-preview {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-}
-
-.preview-card {
-    background: rgba(255, 255, 255, 0.82);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    border-radius: 24px;
-    padding: 24px;
-    box-shadow: 0 35px 80px rgba(26, 58, 92, 0.12);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-    width: 100%;
-    max-width: 440px;
-    transform: perspective(1000px) rotateY(-8deg) rotateX(4deg);
-    transition: all 0.5s ease;
-}
-
-.preview-card:hover {
-    transform: perspective(1000px) rotateY(0deg) rotateX(0deg) scale(1.02);
-    box-shadow: 0 35px 80px rgba(26, 58, 92, 0.18);
-}
-
-.window-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    padding-bottom: 12px;
-}
-
-.window-header .dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-}
-
-.window-header .dot.red { background: #ff5f56; }
-.window-header .dot.yellow { background: #ffbd2e; }
-.window-header .dot.green { background: #27c93f; }
-
-.window-header .window-title {
-    margin-left: 10px;
-    font-size: 0.78rem;
-    color: #94a3b8;
-    font-family: monospace;
-}
-
-.preview-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-bottom: 24px;
-}
-
-.p-stat-card {
-    background: white;
-    border-radius: 12px;
-    padding: 12px;
-    text-align: center;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.02);
-    border-top: 3.5px solid #dde3ea;
-}
-
-.p-stat-card.pending { border-top-color: #f59e0b; }
-.p-stat-card.approved { border-top-color: #10b981; }
-.p-stat-card.cl { border-top-color: #3b82f6; }
-
-.p-num {
-    display: block;
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 2px;
-}
-
-.p-lbl {
-    font-size: 0.72rem;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-}
-
-.preview-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.preview-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: white;
-    padding: 12px;
-    border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.02);
-}
-
-.item-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: #e2e8f0;
-    color: #475569;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.78rem;
-    font-weight: 600;
-    flex-shrink: 0;
-}
-
-.preview-item:nth-child(1) .item-avatar { background: #dbeafe; color: #1e40af; }
-.preview-item:nth-child(2) .item-avatar { background: #fef3c7; color: #92400e; }
-
-.item-details {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.item-name {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #1e293b;
-}
-
-.item-type {
-    font-size: 0.72rem;
-    color: #64748b;
-}
-
-.p-badge {
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 20px;
-}
-
-.p-badge.approved { background: #d1f2e1; color: #1a7a4a; }
-.p-badge.pending { background: #fff3cd; color: #856404; }
-
-/* Footer */
-.main-footer {
-    text-align: center;
-    padding: 30px 0;
-    color: #94a3b8;
-    font-size: 0.85rem;
-    border-top: 1px solid rgba(0,0,0,0.04);
-    margin-top: auto;
-    line-height: 1.5;
-}
-
-/* Responsiveness */
-@media(max-width:900px) {
-    .navbar {
-        padding: 20px 0;
+    .page-wrapper{
+        flex-direction:column;
+        width:95%;
+        min-height:auto;
     }
-    .hero {
-        grid-template-columns: 1fr;
-        text-align: center;
-        gap: 50px;
-        padding: 30px 0 60px 0;
+
+    .left-panel,
+    .right-panel{
+        width:100%;
     }
-    .hero-content h1 {
-        font-size: 2.8rem;
-    }
-    .features-grid {
-        justify-items: center;
-        gap: 15px;
-    }
-    .feat-item {
-        justify-content: center;
-    }
-    .hero-actions {
-        justify-content: center;
-    }
-    .hero-preview {
-        order: -1;
-    }
+
 }
 
-@media(max-width:600px) {
-    .hero-content h1 {
-        font-size: 2.3rem;
-    }
-    .features-grid {
-        grid-template-columns: 1fr;
-    }
-    .hero-actions {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .hero-btn {
-        text-align: center;
-    }
+/* LEFT PANEL */
+
+.left-panel{
+    background:linear-gradient(145deg,#1a3a5c,#2e6da4);
+    color:white;
+    width:45%;
+    padding:50px 40px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+}
+
+.logo{
+    font-family:'DM Serif Display',serif;
+    font-size:2rem;
+    margin-bottom:12px;
+}
+
+.left-panel p{
+    font-size:0.95rem;
+    opacity:0.85;
+    line-height:1.7;
+    margin-bottom:25px;
+}
+
+.info-item{
+    margin-bottom:14px;
+    font-size:0.92rem;
+}
+
+/* RIGHT PANEL */
+
+.right-panel{
+    background:white;
+    flex:1;
+    padding:50px 40px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+}
+
+.right-panel h2{
+    font-family:'DM Serif Display',serif;
+    font-size:1.9rem;
+    color:#1a3a5c;
+    margin-bottom:10px;
+}
+
+.subtitle{
+    color:#777;
+    margin-bottom:35px;
+    line-height:1.6;
+}
+
+.btn{
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    font-size:1rem;
+    font-weight:600;
+    cursor:pointer;
+    margin-bottom:15px;
+    transition:0.2s;
+}
+
+.login-btn{
+    background:linear-gradient(135deg,#2e6da4,#1a3a5c);
+    color:white;
+}
+
+.signup-btn{
+    background:#eef4fb;
+    color:#1a3a5c;
+    border:1px solid #d6dde7;
+}
+
+.btn:hover{
+    transform:translateY(-2px);
+}
+
+a{
+    text-decoration:none;
 }
 
 </style>
@@ -473,133 +168,56 @@ body {
 
 <body>
 
-<!-- Background glowing blobs -->
-<div class="bg-blob-1"></div>
-<div class="bg-blob-2"></div>
+<div class="page-wrapper">
 
-<div class="landing-container">
+    <div class="left-panel">
 
-    <!-- Navigation Header -->
-    <header class="navbar">
-        <a href="/" class="nav-logo">
-            <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Leave Desk Logo">
+        <div class="logo" style="display: flex; align-items: center; gap: 10px;">
+            <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Leave Desk Logo" style="height: 40px; width: 40px; object-fit: contain; border-radius: 6px; background: white; padding: 2px; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">
             Leave Desk
-        </a>
-        <div class="nav-actions">
-            <a href="{{ url_for('login') }}" class="nav-btn login">Login</a>
-            <a href="{{ url_for('signup') }}" class="nav-btn register">Create Account</a>
         </div>
-    </header>
 
-    <!-- Hero Section -->
-    <main class="hero">
+        <p>
+            An intelligent leave management portal that enables employees to submit and track leave requests while providing managers with a seamless approval workflow.
+        </p>
         
-        <!-- Left Column: Details -->
-        <div class="hero-content">
-            <h1>Smart Leave Management, Simplified.</h1>
-            <p>
-                An intelligent leave portal designed for teams, managers, and administrators. 
-                Effortlessly apply for leaves, track balances in real time, and streamline the approval workflow with complete visibility.
-            </p>
-            
-            <!-- Features Grid -->
-            <div class="features-grid">
-                <div class="feat-item">
-                    <div class="feat-dot">
-                        <svg stroke="currentColor" fill="none" stroke-width="3" viewBox="0 0 24 24">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                    </div>
-                    Role-Based Access
-                </div>
-                <div class="feat-item">
-                    <div class="feat-dot">
-                        <svg stroke="currentColor" fill="none" stroke-width="3" viewBox="0 0 24 24">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                    </div>
-                    Easy Leave Application
-                </div>
-                <div class="feat-item">
-                    <div class="feat-dot">
-                        <svg stroke="currentColor" fill="none" stroke-width="3" viewBox="0 0 24 24">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                    </div>
-                    Real-Time Request Tracker
-                </div>
-                <div class="feat-item">
-                    <div class="feat-dot">
-                        <svg stroke="currentColor" fill="none" stroke-width="3" viewBox="0 0 24 24">
-                            <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                    </div>
-                    Automated Approvals
-                </div>
-            </div>
+        <div class="info-item">👥 Role-Based User Access</div>
+        <div class="info-item">📝 Easy Leave Application</div>
+        <div class="info-item">📊 Real-Time Request Tracking</div>
+        <div class="info-item">✅ Streamlined Approval Workflow</div>
+        <div class="info-item">🔐 Secure Authentication & Password Recovery</div>
 
-            <!-- Call to Actions -->
-            <div class="hero-actions">
-                <a href="{{ url_for('login') }}" class="hero-btn primary">Login to Portal</a>
-                <a href="{{ url_for('signup') }}" class="hero-btn secondary">Create Account</a>
-            </div>
+    </div>
+
+    <div class="right-panel">
+
+        <h2>Welcome</h2>
+
+        <p class="subtitle">
+            Smart Leave Request & Approval System
+        </p>
+
+        <a href="{{ url_for('login') }}">
+            <button class="btn login-btn">
+                Login
+            </button>
+        </a>
+
+        <a href="{{ url_for('signup') }}">
+            <button class="btn signup-btn">
+                Create Account
+            </button>
+        </a>
+
+        <div style="
+            text-align:center;
+            margin-top:20px;
+            color:#999;
+            font-size:0.8rem;
+        ">
+            © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
         </div>
-
-        <!-- Right Column: Interactive Mock Dashboard Preview -->
-        <div class="hero-preview">
-            <div class="preview-card">
-                <!-- Browser window header -->
-                <div class="window-header">
-                    <span class="dot red"></span>
-                    <span class="dot yellow"></span>
-                    <span class="dot green"></span>
-                    <span class="window-title">leave-desk.app/dashboard</span>
-                </div>
-                
-                <!-- Mock Stat cards -->
-                <div class="preview-stats">
-                    <div class="p-stat-card pending">
-                        <span class="p-num">2</span>
-                        <span class="p-lbl">Pending</span>
-                    </div>
-                    <div class="p-stat-card approved">
-                        <span class="p-num">14</span>
-                        <span class="p-lbl">Approved</span>
-                    </div>
-                    <div class="p-stat-card cl">
-                        <span class="p-num">12</span>
-                        <span class="p-lbl">CL Left</span>
-                    </div>
-                </div>
-                
-                <!-- Mock List requests -->
-                <div class="preview-list">
-                    <div class="preview-item">
-                        <div class="item-avatar">JD</div>
-                        <div class="item-details">
-                            <span class="item-name">Jane Doe</span>
-                            <span class="item-type">Casual Leave (2 days)</span>
-                        </div>
-                        <span class="p-badge approved">Approved</span>
-                    </div>
-                    <div class="preview-item">
-                        <div class="item-avatar">AR</div>
-                        <div class="item-details">
-                            <span class="item-name">Alex Rivera</span>
-                            <span class="item-type">Sick Leave (1 day)</span>
-                        </div>
-                        <span class="p-badge pending">Pending</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </main>
-
-    <!-- Footer -->
-    <footer class="main-footer">
-        © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
-    </footer>
+    </div>
 
 </div>
 
