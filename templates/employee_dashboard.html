@@ -292,22 +292,22 @@ td{
 
     <div class="stats-grid">
 
-        <div class="stat-card" id="total-card" onclick="filterRequests('Total', this)">
+        <div class="stat-card" id="total-card" onclick="window.location.href='/my_requests?status=Total'">
             <h3>{{ stats.total or 0 }}</h3>
             <p>Total</p>
         </div>
 
-        <div class="stat-card" id="pending-card" onclick="filterRequests('Pending', this)">
+        <div class="stat-card" id="pending-card" onclick="window.location.href='/my_requests?status=Pending'">
             <h3>{{ stats.pending or 0 }}</h3>
             <p>Pending</p>
         </div>
 
-        <div class="stat-card" id="approved-card" onclick="filterRequests('Approved', this)">
+        <div class="stat-card" id="approved-card" onclick="window.location.href='/my_requests?status=Approved'">
             <h3>{{ stats.approved or 0 }}</h3>
             <p>Approved</p>
         </div>
 
-        <div class="stat-card" id="rejected-card" onclick="filterRequests('Rejected', this)">
+        <div class="stat-card" id="rejected-card" onclick="window.location.href='/my_requests?status=Rejected'">
             <h3>{{ stats.rejected or 0 }}</h3>
             <p>Rejected</p>
         </div>
@@ -316,113 +316,7 @@ td{
 
 </div>
 
-<div class="card" id="requests-card" style="display: none;">
-    <h2 id="requests-title">📋 Leave Requests Details</h2>
-    
-    <div id="no-requests-msg" style="display: none; text-align: center; padding: 20px; color: #777;">
-        No requests found.
-    </div>
-
-    <div class="table-container" id="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Type</th>
-                    <th>From</th>
-                    <th>To</th>
-                    <th>Total Days</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                    <th>Manager Comment</th>
-                    <th>Decision Date</th>
-                    <th>Submitted On</th>
-                </tr>
-            </thead>
-            <tbody id="requests-table-body">
-                {% for r in requests %}
-                <tr class="request-row" data-status="{{ r.status }}">
-                    <td><span title="{{ r.id }}" style="cursor: help; font-family: monospace; border-bottom: 1px dashed #ccc;">{{ r.id[:8] }}...</span></td>
-                    <td>{{ r.leave_type }}</td>
-                    <td>{{ r.start_date }}</td>
-                    <td>{{ r.end_date }}</td>
-                    <td>{{ r.total_days }}</td>
-                    <td>
-                        <span class="badge {{ r.status }}">
-                            {{ r.status }}
-                        </span>
-                    </td>
-                    <td>
-                        {% if r.status == 'Pending' %}
-                        <a href="/cancel_leave/{{ r.id }}" class="cancel-btn" onclick="return confirm('Cancel this leave request?')">Cancel</a>
-                        {% else %}
-                        -
-                        {% endif %}
-                    </td>
-                    <td>{{ r.manager_comment if r.manager_comment else "-" }}</td>
-                    <td>{{ r.decision_date if r.decision_date else "-" }}</td>
-                    <td>{{ r.submitted_on }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
 </div>
-
-</div>
-
-<script>
-function filterRequests(status, element) {
-    // 1. Manage active classes on stat-cards
-    document.querySelectorAll('.stat-card').forEach(card => {
-        card.classList.remove('active');
-    });
-    if (element) {
-        element.classList.add('active');
-    }
-
-    // 2. Show the requests details card
-    const card = document.getElementById('requests-card');
-    card.style.display = 'block';
-
-    // Update title based on filter
-    const title = document.getElementById('requests-title');
-    title.innerHTML = `📋 ${status} Leave Requests`;
-
-    // 3. Filter rows
-    const rows = document.querySelectorAll('.request-row');
-    let visibleCount = 0;
-
-    rows.forEach(row => {
-        const rowStatus = row.getAttribute('data-status');
-        if (status === 'Total' || rowStatus === status) {
-            row.style.display = '';
-            visibleCount++;
-        } else {
-            row.style.display = 'none';
-        }
-    });
-
-    // 4. Show/hide empty message
-    const msg = document.getElementById('no-requests-msg');
-    const tableContainer = document.getElementById('table-container');
-    if (visibleCount === 0) {
-        msg.style.display = 'block';
-        tableContainer.style.display = 'none';
-    } else {
-        msg.style.display = 'none';
-        tableContainer.style.display = 'block';
-    }
-}
-
-// By default, activate 'Total' filter on load
-document.addEventListener("DOMContentLoaded", () => {
-    const totalCard = document.getElementById('total-card');
-    if (totalCard) {
-        filterRequests('Total', totalCard);
-    }
-});
-</script>
 <footer>
   © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
 </footer>

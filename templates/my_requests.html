@@ -167,7 +167,7 @@ td{
 
 {% for r in requests %}
 
-<tr>
+<tr data-status="{{ r.status }}">
 
 <td><span title="{{ r.id }}" style="cursor: help; font-family: monospace; border-bottom: 1px dashed #ccc;">{{ r.id[:8] }}...</span></td>
 <td>{{ r.leave_type }}</td>
@@ -224,6 +224,10 @@ Cancel
 
 </div>
 
+<div id="no-requests-msg" style="display: none; text-align: center; padding: 20px; color: #777;">
+    No leave requests found.
+</div>
+
 {% else %}
 
 <p>No leave requests found.</p>
@@ -237,6 +241,43 @@ Cancel
 </div>
 
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status');
+    
+    if (status) {
+        // Dynamic title update to reflect the status filter
+        const titleHeader = document.querySelector('.card h2');
+        if (titleHeader) {
+            titleHeader.innerHTML = `📊 My ${status === 'Total' ? '' : status} Leave Requests`;
+        }
+
+        const rows = document.querySelectorAll('tbody tr');
+        let visibleCount = 0;
+        rows.forEach(row => {
+            const rowStatus = row.getAttribute('data-status');
+            if (status.toLowerCase() === 'total' || status.toLowerCase() === 'all' || (rowStatus && rowStatus.toLowerCase() === status.toLowerCase())) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        const tableContainer = document.querySelector('.table-container');
+        const noRequestsMsg = document.getElementById('no-requests-msg');
+        if (visibleCount === 0) {
+            if (tableContainer) tableContainer.style.display = 'none';
+            if (noRequestsMsg) noRequestsMsg.style.display = 'block';
+        } else {
+            if (tableContainer) tableContainer.style.display = '';
+            if (noRequestsMsg) noRequestsMsg.style.display = 'none';
+        }
+    }
+});
+</script>
 
 </body>
 </html>

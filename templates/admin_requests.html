@@ -251,7 +251,7 @@ textarea{
 
 {% if pending_requests %}
 
-<div class="table-container">
+<div class="table-container" id="pendingTableContainer">
 <table>
 
 <thead>
@@ -336,6 +336,8 @@ textarea{
 </table>
 </div>
 
+<div id="no-pending-msg" class="empty-msg" style="display: none; padding: 20px; color: #777; text-align: center;">No pending leave requests.</div>
+
 {% else %}
 
 <p>No pending leave requests.</p>
@@ -352,7 +354,7 @@ textarea{
 
 {% if decision_history %}
 
-<div class="table-container">
+<div class="table-container" id="decisionTableContainer">
 <table>
 
 <thead>
@@ -407,6 +409,8 @@ textarea{
 </table>
 </div>
 
+<div id="no-decision-msg" class="empty-msg" style="display: none; padding: 20px; color: #777; text-align: center;">No decisions recorded yet.</div>
+
 {% else %}
 
 <p>No decisions recorded yet.</p>
@@ -429,30 +433,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 1. Filter Pending Rows
     const pendingRows = document.querySelectorAll('.pending-row');
+    let pendingVisible = 0;
     pendingRows.forEach(row => {
         const rowRole = row.getAttribute('data-role');
         const matchesRole = !role || rowRole === role;
-        const matchesStatus = !status || status === 'Pending';
+        const matchesStatus = !status || status.toLowerCase() === 'pending';
         if (matchesRole && matchesStatus) {
             row.style.display = '';
+            pendingVisible++;
         } else {
             row.style.display = 'none';
         }
     });
 
+    const pendingContainer = document.getElementById('pendingTableContainer');
+    const noPendingMsg = document.getElementById('no-pending-msg');
+    if (pendingContainer && noPendingMsg) {
+        if (pendingVisible === 0) {
+            pendingContainer.style.display = 'none';
+            noPendingMsg.style.display = 'block';
+        } else {
+            pendingContainer.style.display = '';
+            noPendingMsg.style.display = 'none';
+        }
+    }
+
     // 2. Filter Decision Rows
     const decisionRows = document.querySelectorAll('.decision-row');
+    let decisionVisible = 0;
     decisionRows.forEach(row => {
         const rowRole = row.getAttribute('data-role');
         const rowStatus = row.getAttribute('data-status');
         const matchesRole = !role || rowRole === role;
-        const matchesStatus = !status || status === 'All' || rowStatus === status;
+        const matchesStatus = !status || status.toLowerCase() === 'all' || rowStatus.toLowerCase() === status.toLowerCase();
         if (matchesRole && matchesStatus) {
             row.style.display = '';
+            decisionVisible++;
         } else {
             row.style.display = 'none';
         }
     });
+
+    const decisionContainer = document.getElementById('decisionTableContainer');
+    const noDecisionMsg = document.getElementById('no-decision-msg');
+    if (decisionContainer && noDecisionMsg) {
+        if (decisionVisible === 0) {
+            decisionContainer.style.display = 'none';
+            noDecisionMsg.style.display = 'block';
+        } else {
+            decisionContainer.style.display = '';
+            noDecisionMsg.style.display = 'none';
+        }
+    }
 });
 </script>
 </body>

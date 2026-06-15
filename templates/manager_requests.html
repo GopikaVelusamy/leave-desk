@@ -420,7 +420,7 @@
 
     {% if all_requests %}
 
-    <div class="table-container">
+    <div class="table-container" id="tableContainer">
     <table id="requestsTable">
 
       <thead>
@@ -564,6 +564,10 @@
     </table>
     </div>
 
+    <div id="no-records-msg" class="empty-msg" style="display: none; text-align: center; padding: 20px; color: #777;">
+      No leave requests found.
+    </div>
+
     {% else %}
 
     <div class="empty-msg">
@@ -585,17 +589,31 @@ function filterTable(status, clickedTab) {
 
     clickedTab.classList.add('active');
 
+    let visibleCount = 0;
     document.querySelectorAll('#requestsTable tbody tr')
       .forEach(row => {
 
         if(status === 'All' || row.dataset.status === status){
             row.style.display = '';
+            visibleCount++;
         }
         else{
             row.style.display = 'none';
         }
 
     });
+
+    const container = document.getElementById('tableContainer');
+    const msg = document.getElementById('no-records-msg');
+    if (container && msg) {
+        if (visibleCount === 0) {
+            container.style.display = 'none';
+            msg.style.display = 'block';
+        } else {
+            container.style.display = '';
+            msg.style.display = 'none';
+        }
+    }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
