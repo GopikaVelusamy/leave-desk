@@ -1383,6 +1383,9 @@ def admin_requests():
                 # Set employee_id as the employee string code (e.g. MGR001) for the template display
                 r["employee_id"] = emp_data.get("employee_id", "Unknown")
                 r["employee_role"] = emp_data.get("role", "employee")
+                r["casual_leave"] = emp_data.get("casual_leave", 6)
+                r["sick_leave"] = emp_data.get("sick_leave", 6)
+                r["annual_leave"] = emp_data.get("annual_leave", 12)
 
                 if r.get("status") == "Pending":
                     pending_cnt += 1

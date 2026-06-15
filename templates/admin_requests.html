@@ -73,7 +73,8 @@ nav{
 
 .stats-box{
     text-align:center;
-    background:#f7f9fb;
+    background:#fff;
+    border: 1.5px solid #dde3ea;
     padding:30px;
     border-radius:12px;
 }
@@ -257,16 +258,15 @@ textarea{
 <thead>
 
 <tr>
-    <th>ID</th>
-    <th>Applicant</th>
-    <th>Role</th>
-    <th>Employee ID</th>
+    <th>Employee Details</th>
     <th>Leave Type</th>
     <th>From</th>
     <th>To</th>
-    <th>Days</th>
+    <th>Total Days</th>
     <th>Reason</th>
-    <th>Comment</th>
+    <th>Submitted</th>
+    <th>Approval Level</th>
+    <th>Decision Comment</th>
     <th>Action</th>
 </tr>
 
@@ -278,19 +278,38 @@ textarea{
 
 <tr class="pending-row" data-role="{{ req.employee_role }}">
 
-    <td><span title="{{ req.id }}" style="cursor: help; font-family: monospace; border-bottom: 1px dashed #ccc;">{{ req.id[:8] }}...</span></td>
-    <td>{{ req.full_name }}</td>
     <td>
-        <span class="badge {{ req.employee_role }}">
+        <strong>{{ req.full_name }}</strong>
+        &nbsp;
+        <span class="badge {{ req.employee_role }}" style="font-size:0.75rem; padding: 2px 8px;">
             {{ req.employee_role|capitalize }}
         </span>
+        <br>
+        <span style="color:#888;font-size:0.8rem;">
+            Employee ID: {{ req.employee_id }}
+        </span>
+        <br><br>
+        <div style="font-size:0.85rem;color:#2e6da4;">
+            CL: <strong>{{ req.casual_leave }}</strong>
+            &nbsp;|&nbsp;
+            SL: <strong>{{ req.sick_leave }}</strong>
+            &nbsp;|&nbsp;
+            AL: <strong>{{ req.annual_leave }}</strong>
+        </div>
+        <small style="color:#666;">
+            Remaining Leave Balance
+        </small>
     </td>
-    <td>{{ req.employee_id }}</td>
     <td>{{ req.leave_type }}</td>
     <td>{{ req.start_date }}</td>
     <td>{{ req.end_date }}</td>
     <td>{{ req.total_days }}</td>
-    <td>{{ req.reason }}</td>
+    <td title="{{ req.reason }}">
+        {{ req.reason[:50] }}
+        {% if req.reason|length > 50 %}...{% endif %}
+    </td>
+    <td>{{ req.submitted_on }}</td>
+    <td>{{ req.approval_level|title }}</td>
 
     <td>
 
@@ -360,12 +379,17 @@ textarea{
 <thead>
 
 <tr>
-    <th>Applicant</th>
-    <th>Role</th>
+    <th>Employee Details</th>
     <th>Leave Type</th>
+    <th>From</th>
+    <th>To</th>
+    <th>Total Days</th>
+    <th>Reason</th>
+    <th>Submitted</th>
     <th>Status</th>
-    <th>Decision Comment</th>
+    <th>Approval Level</th>
     <th>Decision Date</th>
+    <th>Decision Comment</th>
 </tr>
 
 </thead>
@@ -376,13 +400,37 @@ textarea{
 
 <tr class="decision-row" data-role="{{ req.employee_role }}" data-status="{{ req.status }}">
 
-    <td>{{ req.full_name }}</td>
     <td>
-        <span class="badge {{ req.employee_role }}">
+        <strong>{{ req.full_name }}</strong>
+        &nbsp;
+        <span class="badge {{ req.employee_role }}" style="font-size:0.75rem; padding: 2px 8px;">
             {{ req.employee_role|capitalize }}
         </span>
+        <br>
+        <span style="color:#888;font-size:0.8rem;">
+            Employee ID: {{ req.employee_id }}
+        </span>
+        <br><br>
+        <div style="font-size:0.85rem;color:#2e6da4;">
+            CL: <strong>{{ req.casual_leave }}</strong>
+            &nbsp;|&nbsp;
+            SL: <strong>{{ req.sick_leave }}</strong>
+            &nbsp;|&nbsp;
+            AL: <strong>{{ req.annual_leave }}</strong>
+        </div>
+        <small style="color:#666;">
+            Remaining Leave Balance
+        </small>
     </td>
     <td>{{ req.leave_type }}</td>
+    <td>{{ req.start_date }}</td>
+    <td>{{ req.end_date }}</td>
+    <td>{{ req.total_days }}</td>
+    <td title="{{ req.reason }}">
+        {{ req.reason[:50] }}
+        {% if req.reason|length > 50 %}...{% endif %}
+    </td>
+    <td>{{ req.submitted_on }}</td>
 
     <td>
 
@@ -396,19 +444,18 @@ textarea{
             {% endif %}
         </span>
         {% if req.status != 'Pending' and req.processed_by_role %}
-            <div style="font-size: 0.72rem; color: #666; margin-top: 4px;">
+            <div style="font-size: 0.72rem; color: #666; margin-top: 4px; line-height: 1.2;">
                 by {{ req.processed_by_name }} ({{ req.processed_by_role|title }})
             </div>
         {% endif %}
 
     </td>
-
-    <td>
-        {{ req.manager_comment if req.manager_comment else "-" }}
-    </td>
-
+    <td>{{ req.approval_level|title }}</td>
     <td>
         {{ req.decision_date }}
+    </td>
+    <td>
+        {{ req.manager_comment if req.manager_comment else "-" }}
     </td>
 
 </tr>
