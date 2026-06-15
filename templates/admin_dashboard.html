@@ -354,27 +354,27 @@ footer{
 
     <div class="stat-card" onclick="window.location.href='/admin_requests?role=employee&status=Pending'">
         <h2>{{ stats.employee_pending }}</h2>
-        <p>Employee Pending</p>
+        <p>Pending Employee Leaves</p>
     </div>
 
     <div class="stat-card" onclick="window.location.href='/admin_requests?role=employee&status=Approved'">
         <h2>{{ stats.employee_approved }}</h2>
-        <p>Employee Approved</p>
+        <p>Approved Employee Leaves</p>
     </div>
 
     <div class="stat-card" onclick="window.location.href='/admin_requests?role=manager&status=Pending'">
         <h2>{{ stats.manager_pending }}</h2>
-        <p>Manager Pending</p>
+        <p>Pending Manager Leaves</p>
     </div>
 
     <div class="stat-card" onclick="window.location.href='/admin_requests?role=manager&status=Approved'">
         <h2>{{ stats.manager_approved }}</h2>
-        <p>Manager Approved</p>
+        <p>Approved Manager Leaves</p>
     </div>
 
     <div class="stat-card" onclick="window.location.href='/admin_requests?status=Rejected'">
         <h2>{{ stats.employee_rejected + stats.manager_rejected }}</h2>
-        <p>Total Rejected</p>
+        <p>Total Rejected Leaves</p>
     </div>
 
 </div>
