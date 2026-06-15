@@ -284,23 +284,23 @@ td{
 
         <div style="flex: 1; min-width: 200px;">
             <!-- Text Search Input -->
-            <input type="text" name="search" id="search-text" value="{% if search_by in ['name', 'employee_id', 'department'] or not search_by %}{{ search_query or '' }}{% endif %}" placeholder="Search term..." style="width: 100%; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem; display: {% if search_by in ['role', 'status'] %}none{% else %}block{% endif %};">
+            <input type="text" name="search" id="search-text" value="{% if search_by in ['name', 'employee_id', 'department'] or not search_by %}{{ search_query or '' }}{% endif %}" placeholder="Search term..." style="width: 100%; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem;">
 
             <!-- Role Select Dropdown -->
-            <select id="search-role" style="width: 100%; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem; background: white; outline: none; cursor: pointer; display: {% if search_by == 'role' %}block{% else %}none{% endif %};">
+            <select id="search-role" style="width: 100%; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem; background: white; outline: none; cursor: pointer; display: none;">
                 <option value="employee" {% if search_query == 'employee' %}selected{% endif %}>Employee</option>
                 <option value="manager" {% if search_query == 'manager' %}selected{% endif %}>Manager</option>
                 <option value="admin" {% if search_query == 'admin' %}selected{% endif %}>Admin</option>
             </select>
 
             <!-- Status Select Dropdown -->
-            <select id="search-status" style="width: 100%; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem; background: white; outline: none; cursor: pointer; display: {% if search_by == 'status' %}block{% else %}none{% endif %};">
+            <select id="search-status" style="width: 100%; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem; background: white; outline: none; cursor: pointer; display: none;">
                 <option value="active" {% if search_query == 'active' %}selected{% endif %}>Active</option>
                 <option value="inactive" {% if search_query == 'inactive' %}selected{% endif %}>Inactive</option>
             </select>
         </div>
 
-        <button type="submit" onclick="prepareSearchSubmit(event)" class="edit-btn" style="border: none; cursor: pointer; padding: 10px 20px;">Search</button>
+        <button type="submit" onclick="prepareSearchSubmit()" class="edit-btn" style="border: none; cursor: pointer; padding: 10px 20px;">Search</button>
         {% if search_query or role_filter != 'all' %}
             <a href="/manage_employees?role=all" class="tab" style="line-height: 2.2; text-align: center; display: inline-block;">Clear</a>
         {% endif %}
@@ -337,7 +337,7 @@ td{
         }
     }
 
-    function prepareSearchSubmit(event) {
+    function prepareSearchSubmit() {
         const searchBy = document.getElementById("search-by").value;
         const textInput = document.getElementById("search-text");
         
