@@ -433,6 +433,11 @@ footer{
                     <span class="status {{ req.status|lower }}">
                         {{ req.status }}
                     </span>
+                    {% if req.status != 'Pending' and req.processed_by_role %}
+                        <div style="font-size: 0.72rem; color: #666; margin-top: 4px;">
+                            by {{ req.processed_by_name }} ({{ req.processed_by_role|title }})
+                        </div>
+                    {% endif %}
 
                 </td>
 

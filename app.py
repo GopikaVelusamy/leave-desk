@@ -102,6 +102,24 @@ def to_dict_with_id(doc):
     return d
 
 
+def resolve_deciders(requests_list, users_dict):
+    """Resolve processed_by_name and processed_by_role for each request in the list."""
+    for r in requests_list:
+        decider_id = r.get("approved_by")
+        if decider_id:
+            decider_data = users_dict.get(decider_id)
+            if decider_data:
+                r["processed_by_name"] = decider_data.get("full_name", "System")
+                r["processed_by_role"] = decider_data.get("role", "")
+            else:
+                r["processed_by_name"] = "System"
+                r["processed_by_role"] = ""
+        else:
+            r["processed_by_name"] = ""
+            r["processed_by_role"] = ""
+
+
+
 # -----------------------------------------
 # DATABASE SETUP
 # -----------------------------------------
@@ -668,6 +686,11 @@ def my_requests():
     try:
         docs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
         requests = [to_dict_with_id(d) for d in docs]
+        
+        users_docs = db_firestore.collection("users").get()
+        users_dict = {u.id: to_dict_with_id(u) for u in users_docs}
+        resolve_deciders(requests, users_dict)
+
         requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         return render_template("my_requests.html", requests=requests)
     except Exception as e:
@@ -965,6 +988,9 @@ def manager_dashboard():
                 d["full_name"] = emp_data.get("full_name", "Unknown")
                 all_manager_requests.append(d)
 
+        # Resolve deciders
+        resolve_deciders(all_manager_requests, users_dict)
+
         # Sort and take 5
         all_manager_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         recent_requests = all_manager_requests[:5]
@@ -1060,6 +1086,9 @@ def manager_requests():
 
                 all_requests.append(d)
 
+        # Resolve deciders
+        resolve_deciders(all_requests, users_dict)
+
         # Sort: pending first, then submitted_on desc
         # Using stable sort:
         all_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
@@ -1109,6 +1138,11 @@ def manager_leave():
 
         docs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
         requests = [to_dict_with_id(d) for d in docs]
+        
+        users_docs = db_firestore.collection("users").get()
+        users_dict = {u.id: to_dict_with_id(u) for u in users_docs}
+        resolve_deciders(requests, users_dict)
+
         requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
 
         today = date.today()
@@ -1186,6 +1220,8 @@ def admin_dashboard():
                 emp_data = users_dict.get(emp_id, {})
                 r["full_name"] = emp_data.get("full_name", "Unknown")
                 recent_requests.append(r)
+
+        resolve_deciders(recent_requests, users_dict)
 
         recent_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         recent_requests = recent_requests[:5]
@@ -1355,6 +1391,7 @@ def admin_requests():
                     decision_history.append(r)
 
         # Sort lists
+        resolve_deciders(decision_history, users_dict)
         pending_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         decision_history.sort(key=lambda x: x.get("decision_date") or "", reverse=True)
         decision_history = decision_history[:10]

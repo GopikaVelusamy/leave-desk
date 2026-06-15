@@ -394,7 +394,7 @@
           <th>Status</th>
           <th>Approval Level</th>
           <th>Action</th>
-          <th>Approver Comment</th>
+          <th>Decision Comment</th>
           <th>Decision Date</th>
           <th>Submitted On</th>
         </tr>
@@ -417,6 +417,11 @@
           <span class="badge {{ r.status }}">
             {{ r.status }}
           </span>
+          {% if r.status != 'Pending' and r.processed_by_role %}
+            <div style="font-size: 0.72rem; color: #666; margin-top: 4px;">
+              by {{ r.processed_by_name }} ({{ r.processed_by_role|title }})
+            </div>
+          {% endif %}
         </td>
         <td>{{ r.approval_level|title }}</td>
         <td>
