@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>User Management | LeaveDesk</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+
+<script>
+(function() {
+  const themes = {
+    blue: { primary: '#1a3a5c', secondary: '#2e6da4', gradient: 'linear-gradient(135deg, #1a3a5c, #2e6da4)' },
+    green: { primary: '#1b5e20', secondary: '#4caf50', gradient: 'linear-gradient(135deg, #1b5e20, #4caf50)' },
+    purple: { primary: '#4a148c', secondary: '#9c27b0', gradient: 'linear-gradient(135deg, #4a148c, #9c27b0)' },
+    red: { primary: '#b71c1c', secondary: '#f44336', gradient: 'linear-gradient(135deg, #b71c1c, #f44336)' },
+    orange: { primary: '#e65100', secondary: '#ff9800', gradient: 'linear-gradient(135deg, #e65100, #ff9800)' }
+  };
+  const colorName = localStorage.getItem('theme-color') || 'blue';
+  const theme = themes[colorName] || themes.blue;
+  const styleBlock = document.createElement('style');
+  styleBlock.id = 'dynamic-theme-style';
+  styleBlock.innerHTML = `
+    nav { background: ${theme.gradient} !important; }
+    .btn, .btn-submit, .edit-btn, .tab.active { background: ${theme.gradient} !important; color: white !important; }
+    .card h2, .card h1, .welcome-card h1 { color: ${theme.primary} !important; }
+    .signup-link a, .links a, a { color: ${theme.secondary}; }
+    .signup-link a:hover, .links a:hover, a:hover { color: ${theme.primary}; }
+  `;
+  document.head.appendChild(styleBlock);
+})();
+</script>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:'DM Sans',sans-serif;
+    background:#f2f5f9;
+}
+
+nav{
+    background:linear-gradient(135deg,#1d4268,#2e6da4);
+    padding:16px 30px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.brand{
+    color:white;
+    font-size:1.5rem;
+    font-family:'DM Serif Display',serif;
+}
+
+.nav-links{
+    display:flex;
+    gap:12px;
+    align-items:center;
+}
+
+.nav-links a{
+    color:white;
+    text-decoration:none;
+    padding:10px 16px;
+    border-radius:8px;
+    background:rgba(255,255,255,0.15);
+}
+
+.nav-links a:hover{
+    background:rgba(255,255,255,0.25);
+}
+
+.container{
+    max-width:1300px;
+    margin:40px auto;
+    padding:0 20px;
+}
+
+.card{
+    background:white;
+    border-radius:18px;
+    padding:25px;
+    margin-bottom:30px;
+    box-shadow:0 2px 12px rgba(0,0,0,0.08);
+}
+
+.card h2{
+    color:#163d6b;
+    margin-bottom:20px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th{
+    background:#f4f6f8;
+    padding:14px;
+    text-align:left;
+}
+
+td{
+    padding:14px;
+    border-bottom:1px solid #eee;
+}
+
+.badge{
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:0.85rem;
+    font-weight:600;
+}
+
+.employee{
+    background:#d6eaf8;
+    color:#21618c;
+}
+
+.manager{
+    background:#d4efdf;
+    color:#1e8449;
+}
+
+.admin{
+    background:#fadbd8;
+    color:#c0392b;
+}
+
+.active{
+    color:#16a34a;
+    font-weight:600;
+}
+
+.inactive{
+    color:#dc2626;
+    font-weight:600;
+}
+
+.edit-btn{
+    text-decoration:none;
+    background:#2e6da4;
+    color:white;
+    padding:8px 16px;
+    border-radius:6px;
+    display:inline-block;
+    transition: 0.2s;
+}
+
+.edit-btn:hover{
+    opacity: 0.9;
+}
+
+.filter-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.tab {
+    padding: 8px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+    background: #eef4fb;
+    color: #1a3a5c;
+    transition: 0.3s;
+}
+
+.tab:hover {
+    background: #e2ecf7;
+}
+
+.tab.active {
+    background: #2e6da4;
+    color: white;
+}
+
+.flash{
+    padding:14px;
+    margin-bottom:20px;
+    border-radius:8px;
+}
+
+.success{
+    background:#d4edda;
+    color:#155724;
+}
+
+.error{
+    background:#f8d7da;
+    color:#721c24;
+}
+
+.footer{
+    text-align:center;
+    padding:20px;
+    color:#777;
+}
+
+.table-container{
+    overflow-x:auto;
+}
+
+</style>
+</head>
+
+<body>
+
+<nav>
+
+    <div class="brand" style="display: flex; align-items: center; gap: 8px;"><img src="{{ url_for('static', filename='logo.jpg') }}" alt="Leave Desk Logo" style="height: 32px; width: 32px; object-fit: contain; border-radius: 4px; background: white; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">Leave Desk</div>
+
+    <div class="nav-links">
+
+        <a href="{{ url_for('admin_dashboard') }}">
+            Dashboard
+        </a>
+
+        <a href="{{ url_for('admin_requests') }}">
+            Leave Requests
+        </a>
+
+        <a href="{{ url_for('profile') }}">
+            Profile
+        </a>
+
+        <a href="{{ url_for('change_password') }}">
+            Change Password
+        </a>
+        {% include 'bell.html' %}
+        <a href="{{ url_for('logout') }}">
+            Logout
+        </a>
+
+    </div>
+
+</nav>
+
+<div class="container">
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for category,message in messages %}
+<div class="flash {{ category }}">
+    {{ message }}
+</div>
+{% endfor %}
+{% endwith %}
+
+<div class="card">
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">👥 User Directory</h2>
+    </div>
+
+    <div class="filter-tabs">
+        <a href="/manage_employees?role=all&search={{ request.args.get('search', '') }}" class="tab {% if role_filter == 'all' or not role_filter %}active{% endif %}">All</a>
+        <a href="/manage_employees?role=employee&search={{ request.args.get('search', '') }}" class="tab {% if role_filter == 'employee' %}active{% endif %}">Employees</a>
+        <a href="/manage_employees?role=manager&search={{ request.args.get('search', '') }}" class="tab {% if role_filter == 'manager' %}active{% endif %}">Managers</a>
+    </div>
+
+    <form method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
+        <input type="hidden" name="role" value="{{ role_filter }}">
+        <input type="text" name="search" value="{{ request.args.get('search', '') }}" placeholder="Search Employee ID or Name" style="flex: 1; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem;">
+        <button type="submit" class="edit-btn" style="border: none; cursor: pointer;">Search</button>
+        {% if request.args.get('search') or role_filter != 'all' %}
+            <a href="/manage_employees?role=all" class="tab" style="line-height: 2.2; text-align: center; display: inline-block;">Clear</a>
+        {% endif %}
+    </form>
+
+    {% if users %}
+    <div class="table-container">
+    <table>
+
+        <thead>
+
+            <tr>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Department</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+        {% for user in users %}
+
+        <tr class="user-row">
+
+            <td>{{ user.employee_id }}</td>
+
+            <td>{{ user.full_name }}</td>
+
+            <td>{{ user.email }}</td>
+
+            <td>{{ user.department or "-" }}</td>
+
+            <td>
+                <span class="badge {{ user.role }}">
+                    {{ user.role|capitalize }}
+                </span>
+            </td>
+
+            <td>
+                {% if user.is_active %}
+                    <span class="active">Active</span>
+                {% else %}
+                    <span class="inactive">Inactive</span>
+                {% endif %}
+            </td>
+
+            <td>
+
+            {% if user.employee_id != "ADMIN001" and user.id != session["user_id"] %}
+
+            <a href="{{ url_for('edit_employee', user_id=user.id) }}"
+            class="edit-btn">
+            Edit
+            </a>
+
+            {% else %}
+            -
+            {% endif %}
+
+            </td>
+
+        </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 40px; color: #666; font-size: 1.1rem;">
+        No users found matching your filters.
+    </div>
+    {% endif %}
+
+</div>
+
+</div>
+
+<div class="footer">
+    © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
+</div>
+
+</body>
+</html>

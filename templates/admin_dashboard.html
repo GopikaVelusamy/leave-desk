@@ -295,9 +295,9 @@ footer{
         </a>
 
         <a href="{{ url_for('admin_requests') }}">
-            Manager Requests
-            {% if stats.manager_pending > 0 %}
-                ({{ stats.manager_pending }})
+            Leave Requests
+            {% if stats.manager_pending > 0 or stats.employee_pending > 0 %}
+                ({{ stats.manager_pending + stats.employee_pending }})
             {% endif %}
         </a>
 
@@ -342,12 +342,12 @@ footer{
 
 <div class="stats-grid">
     
-    <div class="stat-card" onclick="filterUsers('employee')">
+    <div class="stat-card" onclick="window.location.href='/manage_employees?role=employee'">
         <h2>{{ stats.total_employees }}</h2>
         <p>Total Employees</p>
     </div>
 
-    <div class="stat-card" onclick="filterUsers('manager')">
+    <div class="stat-card" onclick="window.location.href='/manage_employees?role=manager'">
         <h2>{{ stats.total_managers }}</h2>
         <p>Total Managers</p>
     </div>
@@ -392,12 +392,12 @@ footer{
             <h3>📋 Review Requests</h3>
 
             <p>
-                Review and approve manager leave requests.
+                Review and approve employee & manager leave requests.
             </p>
 
         </a>
 
-        <a href="#user-management"
+        <a href="/manage_employees"
            class="action-card">
 
             <h3>👥 Manage Users</h3>
@@ -491,111 +491,10 @@ footer{
 
 </div>
 
-<div class="card" id="user-management">
-
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2 style="margin: 0;" id="user-mgmt-title">👥 User Management</h2>
-        <button id="reset-user-filter" onclick="filterUsers('all')" style="display: none; background: #eef4fb; color: #1a3a5c; border: 1px solid #d6dde7; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">Show All Users</button>
-    </div>
-
-    <table>
-
-        <thead>
-
-            <tr>
-                <th>Employee ID</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Department</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-
-        </thead>
-
-        <tbody>
-
-        {% for user in users %}
-
-        <tr class="user-row" data-role="{{ user.role }}">
-
-            <td>{{ user.employee_id }}</td>
-
-            <td>{{ user.full_name }}</td>
-
-            <td>{{ user.email }}</td>
-
-            <td>{{ user.department or "-" }}</td>
-
-            <td>
-                <span class="badge {{ user.role }}">
-                    {{ user.role|capitalize }}
-                </span>
-            </td>
-
-            <td>
-                {% if user.is_active %}
-                    <span class="active">Active</span>
-                {% else %}
-                    <span class="inactive">Inactive</span>
-                {% endif %}
-            </td>
-
-            <td>
-
-            {% if user.employee_id != "ADMIN001" and user.id != session["user_id"] %}
-
-            <a href="{{ url_for('edit_employee', user_id=user.id) }}"
-            class="edit-btn">
-            Edit
-            </a>
-
-            {% else %}
-            -
-            {% endif %}
-
-            </td>
-
-        </tr>
-
-        {% endfor %}
-
-        </tbody>
-
-    </table>
-
-</div>
-
 </div>
 
 <footer>
     © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
 </footer>
-<script>
-function filterUsers(role) {
-    const rows = document.querySelectorAll('.user-row');
-    const title = document.getElementById('user-mgmt-title');
-    const resetBtn = document.getElementById('reset-user-filter');
-
-    if (role === 'all') {
-        title.textContent = '👥 User Management';
-        resetBtn.style.display = 'none';
-        rows.forEach(row => row.style.display = '');
-    } else {
-        title.textContent = `👥 User Management (${role.charAt(0).toUpperCase() + role.slice(1)}s)`;
-        resetBtn.style.display = 'inline-block';
-        rows.forEach(row => {
-            if (row.getAttribute('data-role') === role) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
-    }
-
-    document.getElementById('user-management').scrollIntoView({ behavior: 'smooth' });
-}
-</script>
 </body>
 </html>

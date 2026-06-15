@@ -1188,6 +1188,45 @@ def admin_dashboard():
 
 
 # -----------------------------------------
+# ADMIN - MANAGE EMPLOYEES & USERS DIRECTORY
+# -----------------------------------------
+@app.route("/manage_employees")
+def manage_employees():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    if session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    if not FIREBASE_ENABLED or db_firestore is None:
+        flash("Database service unavailable.", "error")
+        return redirect(url_for("login"))
+
+    try:
+        role_filter = request.args.get("role", "all").strip().lower()
+        search_query = request.args.get("search", "").strip().lower()
+
+        users_docs = db_firestore.collection("users").get()
+        users = [to_dict_with_id(u) for u in users_docs]
+
+        role_order = {"admin": 1, "manager": 2, "employee": 3}
+        users.sort(key=lambda x: (role_order.get(x.get("role") or "employee", 3), (x.get("full_name") or "").lower()))
+
+        # Filter by role
+        if role_filter != "all":
+            users = [u for u in users if u.get("role") == role_filter]
+
+        # Filter by search query
+        if search_query:
+            users = [u for u in users if search_query in (u.get("employee_id") or "").lower() or search_query in (u.get("full_name") or "").lower()]
+
+        return render_template("manage_employees.html", users=users, role_filter=role_filter)
+    except Exception as e:
+        print(f"Manage employees error: {e}")
+        flash("Could not load employee management.", "error")
+        return redirect(url_for("admin_dashboard"))
+
+
+# -----------------------------------------
 # ADMIN - EDIT EMPLOYEE DETAILS
 # -----------------------------------------
 @app.route("/edit_employee/<string:user_id>", methods=["GET", "POST"])
