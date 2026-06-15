@@ -232,7 +232,7 @@ input:focus{
                     <label>Role</label>
                     <select name="role" required style="width: 100%; padding: 12px; border: 1px solid #d9e2ec; border-radius: 8px; font-size: 0.95rem; background: white; cursor: pointer; outline: none;">
                         <option value="employee" {% if user.role == 'employee' %}selected{% endif %}>Employee</option>
-                        <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Manager</option>
+                        <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Employee & Manager</option>
                         <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
                     </select>
                 </div>
