@@ -135,6 +135,37 @@
         document.head.appendChild(styleBlock);
       }
       styleBlock.innerHTML = `
+        body {
+          position: relative;
+          overflow-x: hidden;
+        }
+        /* Background glowing blobs */
+        .bg-blob-1, .bg-blob-2 {
+          position: absolute;
+          width: 550px;
+          height: 550px;
+          border-radius: 50%;
+          filter: blur(160px);
+          z-index: -1;
+          opacity: 0.16;
+          pointer-events: none;
+          animation: floatBlob 15s ease-in-out infinite alternate;
+        }
+        .bg-blob-1 {
+          top: -120px;
+          left: -120px;
+          background: ${theme.primary};
+        }
+        .bg-blob-2 {
+          bottom: -160px;
+          right: -120px;
+          background: ${theme.secondary};
+          animation-delay: 3s;
+        }
+        @keyframes floatBlob {
+          0% { transform: translate(0, 0) scale(1); }
+          100% { transform: translate(50px, 30px) scale(1.08); }
+        }
         nav { background: ${theme.gradient} !important; }
         .btn, .btn-submit, .login-btn, .signup-btn:hover { background: ${theme.gradient} !important; color: white !important; }
         .left-panel { background: ${theme.gradient} !important; }
@@ -261,5 +292,23 @@
 
     // Refresh every 60 seconds
     setInterval(fetchNotifications, 60000);
+
+    // Helper to dynamically inject background blobs to body
+    function injectBlobs() {
+      if (!document.querySelector('.bg-blob-1')) {
+        const blob1 = document.createElement('div');
+        blob1.className = 'bg-blob-1';
+        const blob2 = document.createElement('div');
+        blob2.className = 'bg-blob-2';
+        document.body.appendChild(blob1);
+        document.body.appendChild(blob2);
+      }
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", injectBlobs);
+    } else {
+      injectBlobs();
+    }
   })();
 </script>

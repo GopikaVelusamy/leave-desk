@@ -183,6 +183,11 @@ def home():
     return render_template("home.html")
 
 
+@app.route("/ping")
+def ping():
+    return jsonify({"status": "healthy"}), 200
+
+
 def verify_firebase_password(email, password):
     api_key = "AIzaSyA9i4pJF7daO4ZlVFy64BWsO7TT9zLrfe4"
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
