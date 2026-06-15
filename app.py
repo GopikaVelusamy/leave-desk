@@ -1161,25 +1161,25 @@ def admin_dashboard():
             "manager_rejected": manager_rejected
         }
 
-        # Recent manager requests
+        # Recent leave requests (both employee and manager requests)
         users_dict = {u["id"]: u for u in users}
-        recent_manager_requests = []
+        recent_requests = []
         for r in reqs:
-            if r.get("approval_level") == "admin":
+            if r.get("approval_level") in ["admin", "manager"]:
                 emp_id = r.get("employee_id")
                 emp_data = users_dict.get(emp_id, {})
                 r["full_name"] = emp_data.get("full_name", "Unknown")
-                recent_manager_requests.append(r)
+                recent_requests.append(r)
 
-        recent_manager_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
-        recent_manager_requests = recent_manager_requests[:5]
+        recent_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
+        recent_requests = recent_requests[:5]
 
         return render_template(
             "admin_dashboard.html",
             admin=admin,
             users=users,
             stats=stats,
-            recent_manager_requests=recent_manager_requests
+            recent_requests=recent_requests
         )
     except Exception as e:
         print(f"Admin dashboard loading error: {e}")

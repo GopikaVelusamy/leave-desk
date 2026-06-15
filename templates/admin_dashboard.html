@@ -416,7 +416,7 @@ footer{
     <div class="table-header">
 
         <h2>
-            📋 Recent Manager Leave Requests
+            📋 Recent Leave Requests
         </h2>
 
         <a href="{{ url_for('admin_requests') }}"
@@ -431,7 +431,7 @@ footer{
         <thead>
 
         <tr>
-            <th>Manager</th>
+            <th>Applicant</th>
             <th>Leave Type</th>
             <th>From</th>
             <th>To</th>
@@ -442,9 +442,9 @@ footer{
 
         <tbody>
 
-        {% if recent_manager_requests %}
+        {% if recent_requests %}
 
-            {% for req in recent_manager_requests %}
+            {% for req in recent_requests %}
 
             <tr>
 
@@ -477,7 +477,7 @@ footer{
                 <td colspan="5"
                     style="text-align:center;color:#777;padding:20px;">
 
-                    No manager leave requests found.
+                    No leave requests found.
 
                 </td>
 
