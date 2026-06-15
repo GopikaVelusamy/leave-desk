@@ -228,6 +228,9 @@ td{
 
         <a href="{{ url_for('admin_requests') }}">
             Leave Requests
+            {% if stats.manager_pending > 0 or stats.employee_pending > 0 %}
+                ({{ stats.manager_pending + stats.employee_pending }})
+            {% endif %}
         </a>
 
         <a href="{{ url_for('profile') }}">

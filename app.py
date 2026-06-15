@@ -823,24 +823,40 @@ def submit_leave():
             "approval_level": approval_level
         })
 
-        # Notify appropriate role (admin for manager leaves, manager for employee leaves of the same department)
+        # Notify appropriate role (admin for manager leaves, manager/admins for employee leaves)
         try:
+            receivers = []
             if session["role"] == "manager":
                 # Manager leave requests notify admins
-                receivers = db_firestore.collection("users").where("role", "==", "admin").get()
+                admins = db_firestore.collection("users").where("role", "==", "admin").get()
+                receivers.extend(admins)
             else:
                 # Employee leave requests notify managers of the same department
                 emp_dept = user.get("department", "")
                 if emp_dept:
-                    receivers = db_firestore.collection("users")\
+                    managers = db_firestore.collection("users")\
                         .where("role", "==", "manager")\
                         .where("department", "==", emp_dept)\
                         .get()
+                    receivers.extend(managers)
                 else:
                     # Fallback if employee has no department: notify all managers
-                    receivers = db_firestore.collection("users").where("role", "==", "manager").get()
+                    managers = db_firestore.collection("users").where("role", "==", "manager").get()
+                    receivers.extend(managers)
+                
+                # Also notify all admins since admin can also review employee leaves
+                admins = db_firestore.collection("users").where("role", "==", "admin").get()
+                receivers.extend(admins)
 
-            for rec in receivers:
+            # Deduplicate receivers by user ID
+            seen = set()
+            dedup_receivers = []
+            for r in receivers:
+                if r.id not in seen:
+                    seen.add(r.id)
+                    dedup_receivers.append(r)
+
+            for rec in dedup_receivers:
                 send_notification(
                     rec.id,
                     "New Leave Request",
@@ -1219,7 +1235,17 @@ def manage_employees():
         if search_query:
             users = [u for u in users if search_query in (u.get("employee_id") or "").lower() or search_query in (u.get("full_name") or "").lower()]
 
-        return render_template("manage_employees.html", users=users, role_filter=role_filter)
+        # Calculate pending leave requests stats for navbar badge
+        reqs_docs = db_firestore.collection("leave_requests").get()
+        reqs = [to_dict_with_id(r) for r in reqs_docs]
+        employee_pending = sum(1 for r in reqs if r.get("approval_level") == "manager" and r.get("status") == "Pending")
+        manager_pending = sum(1 for r in reqs if r.get("approval_level") == "admin" and r.get("status") == "Pending")
+        stats = {
+            "employee_pending": employee_pending,
+            "manager_pending": manager_pending
+        }
+
+        return render_template("manage_employees.html", users=users, role_filter=role_filter, stats=stats)
     except Exception as e:
         print(f"Manage employees error: {e}")
         flash("Could not load employee management.", "error")
