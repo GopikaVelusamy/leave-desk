@@ -173,9 +173,7 @@ input:focus{
 
 <nav>
 
-    <div class="logo">
-        📋 Leave Desk
-    </div>
+    <div class="logo" style="display: flex; align-items: center; gap: 8px;"><img src="{{ url_for(\'static\', filename=\'logo.jpg\') }}" alt="Leave Desk Logo" style="height: 32px; width: 32px; object-fit: contain; border-radius: 4px; background: white; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">Leave Desk</div>
 
     <div class="nav-links">
 
@@ -235,6 +233,7 @@ input:focus{
                     <select name="role" required style="width: 100%; padding: 12px; border: 1px solid #d9e2ec; border-radius: 8px; font-size: 0.95rem; background: white; cursor: pointer; outline: none;">
                         <option value="employee" {% if user.role == 'employee' %}selected{% endif %}>Employee</option>
                         <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Manager</option>
+                        <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
                     </select>
                 </div>
 
@@ -317,7 +316,7 @@ input:focus{
     </div>
 
     <div class="footer">
-        Version 1.0 | LeaveDesk
+        Version 1.0 | LeaveDesk<br>Developed by Strategic Knights
     </div>
 
 </div>

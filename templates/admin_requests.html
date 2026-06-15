@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Manager Leave Requests</title>
+<title>Leave Requests Queue</title>
 
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 
@@ -144,6 +144,16 @@ textarea{
     font-weight:600;
 }
 
+.employee{
+    background:#d6eaf8;
+    color:#21618c;
+}
+
+.manager{
+    background:#d4efdf;
+    color:#1e8449;
+}
+
 .pending{
     background:#fff4d6;
     color:#a86b00;
@@ -188,9 +198,7 @@ textarea{
 
 <nav>
 
-    <div class="brand">
-        📋 Leave Desk
-    </div>
+    <div class="brand" style="display: flex; align-items: center; gap: 8px;"><img src="{{ url_for(\'static\', filename=\'logo.jpg\') }}" alt="Leave Desk Logo" style="height: 32px; width: 32px; object-fit: contain; border-radius: 4px; background: white; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">Leave Desk</div>
 
     <div class="nav-links">
         <a href="{{ url_for('admin_dashboard') }}">
@@ -221,7 +229,7 @@ textarea{
 
 <div class="card">
 
-    <h2>📊 Manager Approval Queue</h2>
+    <h2>📊 Approval Queue</h2>
 
     <div class="stats-box">
 
@@ -229,7 +237,7 @@ textarea{
             {{ stats.pending_manager_requests }}
         </h1>
 
-        <p>Pending Manager Leave Requests</p>
+        <p>Pending Leave Requests</p>
 
     </div>
 
@@ -239,7 +247,7 @@ textarea{
 
 <div class="card">
 
-<h2>📋 Pending Manager Leave Requests</h2>
+<h2>📋 Pending Leave Requests</h2>
 
 {% if pending_requests %}
 
@@ -250,7 +258,8 @@ textarea{
 
 <tr>
     <th>ID</th>
-    <th>Manager</th>
+    <th>Applicant</th>
+    <th>Role</th>
     <th>Employee ID</th>
     <th>Leave Type</th>
     <th>From</th>
@@ -267,10 +276,15 @@ textarea{
 
 {% for req in pending_requests %}
 
-<tr>
+<tr class="pending-row" data-role="{{ req.employee_role }}">
 
     <td><span title="{{ req.id }}" style="cursor: help; font-family: monospace; border-bottom: 1px dashed #ccc;">{{ req.id[:8] }}...</span></td>
     <td>{{ req.full_name }}</td>
+    <td>
+        <span class="badge {{ req.employee_role }}">
+            {{ req.employee_role|capitalize }}
+        </span>
+    </td>
     <td>{{ req.employee_id }}</td>
     <td>{{ req.leave_type }}</td>
     <td>{{ req.start_date }}</td>
@@ -324,7 +338,7 @@ textarea{
 
 {% else %}
 
-<p>No pending manager leave requests.</p>
+<p>No pending leave requests.</p>
 
 {% endif %}
 
@@ -344,7 +358,8 @@ textarea{
 <thead>
 
 <tr>
-    <th>Manager</th>
+    <th>Applicant</th>
+    <th>Role</th>
     <th>Leave Type</th>
     <th>Status</th>
     <th>Comment</th>
@@ -357,10 +372,14 @@ textarea{
 
 {% for req in decision_history %}
 
-<tr>
+<tr class="decision-row" data-role="{{ req.employee_role }}" data-status="{{ req.status }}">
 
     <td>{{ req.full_name }}</td>
-
+    <td>
+        <span class="badge {{ req.employee_role }}">
+            {{ req.employee_role|capitalize }}
+        </span>
+    </td>
     <td>{{ req.leave_type }}</td>
 
     <td>
@@ -399,8 +418,42 @@ textarea{
 </div>
 
 <div class="footer">
-    © 2026 LeaveDesk. All Rights Reserved.
+    © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
 </div>
 
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status');
+    const role = urlParams.get('role');
+
+    // 1. Filter Pending Rows
+    const pendingRows = document.querySelectorAll('.pending-row');
+    pendingRows.forEach(row => {
+        const rowRole = row.getAttribute('data-role');
+        const matchesRole = !role || rowRole === role;
+        const matchesStatus = !status || status === 'Pending';
+        if (matchesRole && matchesStatus) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // 2. Filter Decision Rows
+    const decisionRows = document.querySelectorAll('.decision-row');
+    decisionRows.forEach(row => {
+        const rowRole = row.getAttribute('data-role');
+        const rowStatus = row.getAttribute('data-status');
+        const matchesRole = !role || rowRole === role;
+        const matchesStatus = !status || status === 'All' || rowStatus === status;
+        if (matchesRole && matchesStatus) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+</script>
 </body>
 </html>

@@ -194,8 +194,31 @@ def verify_firebase_password(email, password):
 def signup():
     if request.method == "POST":
         full_name = request.form["full_name"]
-        employee_id = request.form["employee_id"].strip().upper()
         email = request.form["email"].strip()
+
+        # Auto-generate a unique Employee ID based on full name
+        parts = [p.upper() for p in re.findall(r'[a-zA-Z0-9]+', full_name)]
+        if len(parts) >= 2:
+            base_id = f"{parts[0]}{parts[1]}"
+        elif len(parts) == 1:
+            base_id = parts[0]
+        else:
+            base_id = "EMP"
+        base_id = base_id[:16]
+
+        import random
+        employee_id = None
+        for attempt in range(100):
+            rand_num = random.randint(1000, 9999)
+            candidate_id = f"{base_id}{rand_num}"
+            existing = db_firestore.collection("users").where("employee_id", "==", candidate_id).limit(1).get()
+            if len(existing) == 0:
+                employee_id = candidate_id
+                break
+
+        if not employee_id:
+            flash("Could not generate a unique Employee ID. Please try again.", "error")
+            return redirect(url_for("signup"))
 
         if not re.match(r"^[^@]+@[^@]+\.[^@]+$", email):
             flash("Please enter a valid email address.", "error")
@@ -277,7 +300,7 @@ def signup():
                 "must_change_password": 0
             })
 
-            flash("Account created successfully!", "success")
+            flash(f"Account created successfully! Your unique User ID is: {employee_id}. Please use this to log in.", "success")
             return redirect(url_for("login"))
         except Exception as e:
             print(f"Signup error: {e}")
@@ -592,12 +615,14 @@ def employee_dashboard():
         user = to_dict_with_id(user_doc)
 
         reqs = db_firestore.collection("leave_requests").where("employee_id", "==", session["user_id"]).stream()
+        requests_list = []
         total = 0
         pending = 0
         approved = 0
         rejected = 0
         for doc in reqs:
-            d = doc.to_dict()
+            d = to_dict_with_id(doc)
+            requests_list.append(d)
             total += 1
             status = d.get("status", "Pending")
             if status == "Pending":
@@ -607,13 +632,14 @@ def employee_dashboard():
             elif status == "Rejected":
                 rejected += 1
 
+        requests_list.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         stats = {
             "total": total,
             "pending": pending,
             "approved": approved,
             "rejected": rejected
         }
-        return render_template("employee_dashboard.html", user=user, stats=stats)
+        return render_template("employee_dashboard.html", user=user, stats=stats, requests=requests_list)
     except Exception as e:
         print(f"Employee dashboard error: {e}")
         flash("Could not load dashboard stats.", "error")
@@ -1183,8 +1209,8 @@ def edit_employee(user_id):
             return redirect(url_for("admin_dashboard"))
 
         user = to_dict_with_id(user_doc)
-        if user["role"] == "admin":
-            flash("Admin account cannot be edited.", "error")
+        if user["employee_id"] == "ADMIN001":
+            flash("System Admin account cannot be edited.", "error")
             return redirect(url_for("admin_dashboard"))
 
         if request.method == "POST":
@@ -1198,7 +1224,7 @@ def edit_employee(user_id):
             annual_leave = int(request.form["annual_leave"])
             role = request.form["role"].strip().lower()
 
-            if role not in ["employee", "manager"]:
+            if role not in ["employee", "manager", "admin"]:
                 flash("Invalid role selection.", "error")
                 return redirect(url_for("admin_dashboard"))
 
@@ -1249,12 +1275,13 @@ def admin_requests():
 
         for doc in reqs_docs:
             r = to_dict_with_id(doc)
-            if r.get("approval_level") == "admin":
+            if r.get("approval_level") in ["admin", "manager"]:
                 emp_id = r.get("employee_id")
                 emp_data = users_dict.get(emp_id, {})
                 r["full_name"] = emp_data.get("full_name", "Unknown")
                 # Set employee_id as the employee string code (e.g. MGR001) for the template display
                 r["employee_id"] = emp_data.get("employee_id", "Unknown")
+                r["employee_role"] = emp_data.get("role", "employee")
 
                 if r.get("status") == "Pending":
                     pending_cnt += 1
@@ -1456,7 +1483,7 @@ def admin_action(request_id):
 
         leave = to_dict_with_id(req_doc)
 
-        if leave["approval_level"] != "admin":
+        if leave["approval_level"] not in ["admin", "manager"]:
             flash("Invalid approval request.", "error")
             return redirect(url_for("admin_requests"))
 
@@ -1474,7 +1501,7 @@ def admin_action(request_id):
             user_ref = db_firestore.collection("users").document(emp_id)
             user_doc = user_ref.get()
             if not user_doc.exists:
-                flash("Manager user not found.", "error")
+                flash("User not found.", "error")
                 return redirect(url_for("admin_requests"))
 
             user = to_dict_with_id(user_doc)
@@ -1487,8 +1514,10 @@ def admin_action(request_id):
             if leave_type in leave_map:
                 col = leave_map[leave_type]
                 current_balance = user.get(col, 0)
-                new_balance = max(0, current_balance - total_days)
-                user_ref.update({col: new_balance})
+                if current_balance < total_days:
+                    flash("Insufficient leave balance for the user.", "error")
+                    return redirect(url_for("admin_requests"))
+                user_ref.update({col: current_balance - total_days})
 
         # Update Request Status
         req_ref.update({
@@ -1498,7 +1527,7 @@ def admin_action(request_id):
             "approved_by": session["user_id"]
         })
 
-        # Send notification to Manager
+        # Send notification to applicant (Manager or Employee)
         try:
             send_notification(
                 leave["employee_id"],
@@ -1507,9 +1536,32 @@ def admin_action(request_id):
                 "success" if action == "Approved" else "error"
             )
         except Exception as e_notif:
-            print(f"Manager notification error: {e_notif}")
+            print(f"Applicant notification error: {e_notif}")
 
-        flash(f"Manager leave request {action.lower()} successfully.", "success")
+        # If the applicant is an employee, notify the department manager too
+        try:
+            applicant_ref = db_firestore.collection("users").document(leave["employee_id"])
+            applicant_doc = applicant_ref.get()
+            if applicant_doc.exists:
+                applicant = to_dict_with_id(applicant_doc)
+                if applicant.get("role") == "employee":
+                    emp_dept = applicant.get("department", "")
+                    if emp_dept:
+                        managers = db_firestore.collection("users")\
+                            .where("role", "==", "manager")\
+                            .where("department", "==", emp_dept)\
+                            .get()
+                        for mgr in managers:
+                            send_notification(
+                                mgr.id,
+                                "Leave Request Processed by Admin",
+                                f"Admin has {action.lower()} the leave request for {applicant['full_name']} ({leave['leave_type']}).",
+                                "info"
+                            )
+        except Exception as e_mgr_notif:
+            print(f"Manager notification error: {e_mgr_notif}")
+
+        flash(f"Leave request {action.lower()} successfully.", "success")
     except Exception as e:
         print(f"Admin action error: {e}")
         flash("Could not process request.", "error")

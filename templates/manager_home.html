@@ -204,6 +204,13 @@ footer{
     padding:30px;
     text-align:center;
     box-shadow:0 4px 12px rgba(0,0,0,0.08);
+    cursor:pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.stat-card:hover{
+    transform: translateY(-4px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
 }
 
 .pending{
@@ -288,9 +295,7 @@ footer{
 
 <nav>
 
-    <div class="brand">
-        📋 Leave Desk
-    </div>
+    <div class="brand" style="display: flex; align-items: center; gap: 8px;"><img src="{{ url_for(\'static\', filename=\'logo.jpg\') }}" alt="Leave Desk Logo" style="height: 32px; width: 32px; object-fit: contain; border-radius: 4px; background: white; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">Leave Desk</div>
 
     <div class="nav-links">
 
@@ -361,22 +366,22 @@ footer{
 
     <div class="stats-grid">
 
-        <div class="stat-card pending">
+        <div class="stat-card pending" onclick="window.location.href='/manager_requests?status=Pending'">
             <h2>{{ stats.pending or 0 }}</h2>
             <p>Pending Requests</p>
         </div>
 
-        <div class="stat-card approved">
+        <div class="stat-card approved" onclick="window.location.href='/manager_requests?status=Approved'">
             <h2>{{ stats.approved or 0 }}</h2>
             <p>Approved Requests</p>
         </div>
 
-        <div class="stat-card rejected">
+        <div class="stat-card rejected" onclick="window.location.href='/manager_requests?status=Rejected'">
             <h2>{{ stats.rejected or 0 }}</h2>
             <p>Rejected Requests</p>
         </div>
 
-        <div class="stat-card employees">
+        <div class="stat-card employees" onclick="window.location.href='/manager_requests?status=All'">
             <h2>{{ total_employees }}</h2>
             <p>Total Employees</p>
         </div>
@@ -452,7 +457,7 @@ footer{
 </div>
 
 <footer>
-    © 2026 LeaveDesk. All Rights Reserved.
+    © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
 </footer>
 </body>
 

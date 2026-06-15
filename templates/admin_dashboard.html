@@ -91,6 +91,13 @@ nav{
     padding:25px;
     text-align:center;
     box-shadow:0 4px 12px rgba(0,0,0,0.08);
+    cursor:pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.stat-card:hover{
+    transform: translateY(-4px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
 }
 
 .stat-card h2{
@@ -278,9 +285,7 @@ footer{
 
 <nav>
 
-    <div class="brand">
-        📋 Leave Desk
-    </div>
+    <div class="brand" style="display: flex; align-items: center; gap: 8px;"><img src="{{ url_for(\'static\', filename=\'logo.jpg\') }}" alt="Leave Desk Logo" style="height: 32px; width: 32px; object-fit: contain; border-radius: 4px; background: white; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">Leave Desk</div>
 
     <div class="nav-links">
 
@@ -337,37 +342,37 @@ footer{
 
 <div class="stats-grid">
     
-    <div class="stat-card">
+    <div class="stat-card" onclick="filterUsers('employee')">
         <h2>{{ stats.total_employees }}</h2>
         <p>Total Employees</p>
     </div>
 
-    <div class="stat-card">
+    <div class="stat-card" onclick="filterUsers('manager')">
         <h2>{{ stats.total_managers }}</h2>
         <p>Total Managers</p>
     </div>
 
-    <div class="stat-card">
+    <div class="stat-card" onclick="window.location.href='/admin_requests?role=employee&status=Pending'">
         <h2>{{ stats.employee_pending }}</h2>
         <p>Employee Pending</p>
     </div>
 
-    <div class="stat-card">
+    <div class="stat-card" onclick="window.location.href='/admin_requests?role=employee&status=Approved'">
         <h2>{{ stats.employee_approved }}</h2>
         <p>Employee Approved</p>
     </div>
 
-    <div class="stat-card">
+    <div class="stat-card" onclick="window.location.href='/admin_requests?role=manager&status=Pending'">
         <h2>{{ stats.manager_pending }}</h2>
         <p>Manager Pending</p>
     </div>
 
-    <div class="stat-card">
+    <div class="stat-card" onclick="window.location.href='/admin_requests?role=manager&status=Approved'">
         <h2>{{ stats.manager_approved }}</h2>
         <p>Manager Approved</p>
     </div>
 
-    <div class="stat-card">
+    <div class="stat-card" onclick="window.location.href='/admin_requests?status=Rejected'">
         <h2>{{ stats.employee_rejected + stats.manager_rejected }}</h2>
         <p>Total Rejected</p>
     </div>
@@ -488,7 +493,10 @@ footer{
 
 <div class="card" id="user-management">
 
-    <h2>👥 User Management</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;" id="user-mgmt-title">👥 User Management</h2>
+        <button id="reset-user-filter" onclick="filterUsers('all')" style="display: none; background: #eef4fb; color: #1a3a5c; border: 1px solid #d6dde7; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">Show All Users</button>
+    </div>
 
     <table>
 
@@ -510,7 +518,7 @@ footer{
 
         {% for user in users %}
 
-        <tr>
+        <tr class="user-row" data-role="{{ user.role }}">
 
             <td>{{ user.employee_id }}</td>
 
@@ -536,13 +544,12 @@ footer{
 
             <td>
 
-            {% if user.role != "admin" %}
+            {% if user.employee_id != "ADMIN001" and user.id != session["user_id"] %}
 
             <a href="{{ url_for('edit_employee', user_id=user.id) }}"
             class="edit-btn">
             Edit
             </a>
-
 
             {% else %}
             -
@@ -563,7 +570,32 @@ footer{
 </div>
 
 <footer>
-    © 2026 LeaveDesk. All Rights Reserved.
+    © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
 </footer>
+<script>
+function filterUsers(role) {
+    const rows = document.querySelectorAll('.user-row');
+    const title = document.getElementById('user-mgmt-title');
+    const resetBtn = document.getElementById('reset-user-filter');
+
+    if (role === 'all') {
+        title.textContent = '👥 User Management';
+        resetBtn.style.display = 'none';
+        rows.forEach(row => row.style.display = '');
+    } else {
+        title.textContent = `👥 User Management (${role.charAt(0).toUpperCase() + role.slice(1)}s)`;
+        resetBtn.style.display = 'inline-block';
+        rows.forEach(row => {
+            if (row.getAttribute('data-role') === role) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    document.getElementById('user-management').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
 </body>
 </html>

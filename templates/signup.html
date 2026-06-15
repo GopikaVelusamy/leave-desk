@@ -3,6 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+  (function() {
+    const themes = {
+      blue: { primary: '#1a3a5c', secondary: '#2e6da4', gradient: 'linear-gradient(135deg, #1a3a5c, #2e6da4)' },
+      green: { primary: '#1b5e20', secondary: '#4caf50', gradient: 'linear-gradient(135deg, #1b5e20, #4caf50)' },
+      purple: { primary: '#4a148c', secondary: '#9c27b0', gradient: 'linear-gradient(135deg, #4a148c, #9c27b0)' },
+      red: { primary: '#b71c1c', secondary: '#f44336', gradient: 'linear-gradient(135deg, #b71c1c, #f44336)' },
+      orange: { primary: '#e65100', secondary: '#ff9800', gradient: 'linear-gradient(135deg, #e65100, #ff9800)' }
+    };
+    const colorName = localStorage.getItem('theme-color') || 'blue';
+    const theme = themes[colorName] || themes.blue;
+    const styleBlock = document.createElement('style');
+    styleBlock.id = 'dynamic-theme-style';
+    styleBlock.innerHTML = `
+      nav { background: ${theme.gradient} !important; }
+      .btn, .btn-submit, .login-btn, .signup-btn:hover { background: ${theme.gradient} !important; color: white !important; }
+      .left-panel { background: ${theme.gradient} !important; }
+      .action-btn, .view-all-btn, .edit-btn, .approve, .btn-approve { background: ${theme.secondary} !important; color: white !important; }
+      .action-btn:hover, .view-all-btn:hover, .edit-btn:hover, .approve:hover, .btn-approve:hover { background: ${theme.primary} !important; }
+      .card h2, .right-panel h2, .card h1, .welcome-card h1, .hero h1 { color: ${theme.primary} !important; }
+      .stat-card.active { border-color: ${theme.secondary} !important; }
+      .balance-card h3, .stat-card h2, .stat-box h1, .balance-card h3, .stat-card h3 { color: ${theme.secondary} !important; }
+      .signup-link a, .links a, a { color: ${theme.secondary}; }
+      .signup-link a:hover, .links a:hover, a:hover { color: ${theme.primary}; }
+    `;
+    document.head.appendChild(styleBlock);
+  })();
+  </script>
   <title>Create Account</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -176,7 +204,7 @@
 
   <div class="left-panel">
 
-    <div class="logo">📋 Leave Desk</div>
+    <div class="logo" style="display: flex; align-items: center; gap: 10px;"><img src="{{ url_for(\'static\', filename=\'logo.jpg\') }}" alt="Leave Desk Logo" style="height: 40px; width: 40px; object-fit: contain; border-radius: 6px; background: white; padding: 2px; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">Leave Desk</div>
 
     <p>
       Create your account to submit leave requests,
@@ -212,18 +240,6 @@
           name="full_name"
           placeholder="Enter your full name"
           required>
-      </div>
-
-      <div class="form-group">
-
-        <label>Employee ID</label>
-
-        <input
-          type="text"
-          name="employee_id"
-          placeholder="Enter Employee ID"
-          required>
-
       </div>
 
       <div class="form-group">
@@ -312,7 +328,7 @@
         color:#999;
         font-size:0.8rem;
     ">
-        © 2026 LeaveDesk. All Rights Reserved.
+        © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
     </div>
 
   </div>
