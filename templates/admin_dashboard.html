@@ -191,6 +191,21 @@ td{
     color:#c0392b;
 }
 
+.pending{
+    background:#fff4d6;
+    color:#a86b00;
+}
+
+.approved{
+    background:#d4edda;
+    color:#155724;
+}
+
+.rejected{
+    background:#f8d7da;
+    color:#721c24;
+}
+
 .active{
     color:#16a34a;
     font-weight:600;
@@ -434,7 +449,13 @@ footer{
                 <td>
 
                     <span class="badge {{ req.status.lower() }}">
-                        {{ req.status }}
+                        {% if req.status == 'Approved' %}
+                            ✅ Approved
+                        {% elif req.status == 'Rejected' %}
+                            ❌ Rejected
+                        {% else %}
+                            ⏳ Pending
+                        {% endif %}
                     </span>
                     {% if req.status != 'Pending' and req.processed_by_role %}
                         <div style="font-size: 0.72rem; color: #666; margin-top: 4px;">

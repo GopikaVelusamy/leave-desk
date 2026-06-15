@@ -387,7 +387,13 @@ textarea{
     <td>
 
         <span class="badge {{ req.status.lower() }}">
-            {{ req.status }}
+            {% if req.status == 'Approved' %}
+                ✅ Approved
+            {% elif req.status == 'Rejected' %}
+                ❌ Rejected
+            {% else %}
+                ⏳ Pending
+            {% endif %}
         </span>
         {% if req.status != 'Pending' and req.processed_by_role %}
             <div style="font-size: 0.72rem; color: #666; margin-top: 4px;">
