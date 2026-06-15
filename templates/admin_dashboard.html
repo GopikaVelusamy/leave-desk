@@ -100,6 +100,12 @@ nav{
     box-shadow: 0 6px 18px rgba(0,0,0,0.12);
 }
 
+.stat-card.employees { border-top: 5px solid #3b82f6; }
+.stat-card.managers { border-top: 5px solid #8b5cf6; }
+.stat-card.pending { border-top: 5px solid #f59e0b; }
+.stat-card.approved { border-top: 5px solid #10b981; }
+.stat-card.rejected { border-top: 5px solid #ef4444; }
+
 
 .stat-card h2{
     font-size:2rem;
@@ -186,17 +192,17 @@ td{
     color:#c0392b;
 }
 
-.pending{
+.badge.pending{
     background:#fff4d6;
     color:#a86b00;
 }
 
-.approved{
+.badge.approved{
     background:#d4edda;
     color:#155724;
 }
 
-.rejected{
+.badge.rejected{
     background:#f8d7da;
     color:#721c24;
 }
@@ -444,13 +450,7 @@ footer{
                 <td>
 
                     <span class="badge {{ req.status.lower() }}">
-                        {% if req.status == 'Approved' %}
-                            ✅ Approved
-                        {% elif req.status == 'Rejected' %}
-                            ❌ Rejected
-                        {% else %}
-                            ⏳ Pending
-                        {% endif %}
+                        {{ req.status }}
                     </span>
                     {% if req.status != 'Pending' and req.processed_by_role %}
                         <div style="font-size: 0.72rem; color: #666; margin-top: 4px;">

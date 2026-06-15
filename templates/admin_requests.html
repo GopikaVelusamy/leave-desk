@@ -155,17 +155,17 @@ textarea{
     color:#1e8449;
 }
 
-.pending{
+.badge.pending{
     background:#fff4d6;
     color:#a86b00;
 }
 
-.approved{
+.badge.approved{
     background:#d4edda;
     color:#155724;
 }
 
-.rejected{
+.badge.rejected{
     background:#f8d7da;
     color:#721c24;
 }
@@ -435,13 +435,7 @@ textarea{
     <td>
 
         <span class="badge {{ req.status.lower() }}">
-            {% if req.status == 'Approved' %}
-                ✅ Approved
-            {% elif req.status == 'Rejected' %}
-                ❌ Rejected
-            {% else %}
-                ⏳ Pending
-            {% endif %}
+            {{ req.status }}
         </span>
         {% if req.status != 'Pending' and req.processed_by_role %}
             <div style="font-size: 0.72rem; color: #666; margin-top: 4px; line-height: 1.2;">

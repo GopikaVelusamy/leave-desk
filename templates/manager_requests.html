@@ -487,15 +487,7 @@
           <td>
             <span
               class="badge {{ r.status }}">
-
-              {% if r.status == 'Approved' %}
-                  ✅ Approved
-              {% elif r.status == 'Rejected' %}
-                  ❌ Rejected
-              {% else %}
-                  ⏳ Pending
-              {% endif %}
-
+              {{ r.status }}
             </span>
             {% if r.status != 'Pending' and r.processed_by_role %}
               <div style="font-size: 0.72rem; color: #666; margin-top: 4px; line-height: 1.2;">
