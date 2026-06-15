@@ -950,8 +950,8 @@ def manager_dashboard():
                 emp_data = users_dict.get(emp_id, {})
                 emp_dept = (emp_data.get("department") or "").strip().lower()
 
-                # Filter by department
-                if emp_dept != manager_dept:
+                # Filter by department: allow empty department to be viewed by all managers
+                if emp_dept and emp_dept != manager_dept:
                     continue
 
                 status = d.get("status", "Pending")
@@ -969,10 +969,10 @@ def manager_dashboard():
         all_manager_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         recent_requests = all_manager_requests[:5]
 
-        # Filter total employee count to match manager's department
+        # Filter total employee count to match manager's department (including unassigned department employees)
         total_employees = sum(
             1 for u in users_dict.values()
-            if u.get("role") == "employee" and (u.get("department") or "").strip().lower() == manager_dept
+            if u.get("role") == "employee" and (not (u.get("department") or "").strip() or (u.get("department") or "").strip().lower() == manager_dept)
         )
 
         stats = {
@@ -1034,8 +1034,8 @@ def manager_requests():
                     continue
 
                 emp_dept = (emp_data.get("department") or "").strip().lower()
-                # Filter by department
-                if emp_dept != manager_dept:
+                # Filter by department: allow empty department to be viewed by all managers
+                if emp_dept and emp_dept != manager_dept:
                     continue
 
                 status = d.get("status", "Pending")
@@ -1065,10 +1065,10 @@ def manager_requests():
         all_requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
         all_requests.sort(key=lambda x: 0 if x.get("status") == "Pending" else 1)
 
-        # Filter total employee count to match manager's department
+        # Filter total employee count to match manager's department (including unassigned department employees)
         total_employees = sum(
             1 for u in users_dict.values()
-            if u.get("role") == "employee" and (u.get("department") or "").strip().lower() == manager_dept
+            if u.get("role") == "employee" and (not (u.get("department") or "").strip() or (u.get("department") or "").strip().lower() == manager_dept)
         )
 
         stats = {
@@ -1615,6 +1615,11 @@ def admin_action(request_id):
                         managers = db_firestore.collection("users")\
                             .where("role", "==", "manager")\
                             .where("department", "==", emp_dept)\
+                            .get()
+                    else:
+                        # Notify all managers if employee has no department assigned
+                        managers = db_firestore.collection("users")\
+                            .where("role", "==", "manager")\
                             .get()
                         for mgr in managers:
                             send_notification(
