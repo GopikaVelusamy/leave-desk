@@ -266,19 +266,91 @@ td{
     </div>
 
     <div class="filter-tabs">
-        <a href="/manage_employees?role=all&search={{ request.args.get('search', '') }}" class="tab {% if role_filter == 'all' or not role_filter %}active{% endif %}">All</a>
-        <a href="/manage_employees?role=employee&search={{ request.args.get('search', '') }}" class="tab {% if role_filter == 'employee' %}active{% endif %}">Employees</a>
-        <a href="/manage_employees?role=manager&search={{ request.args.get('search', '') }}" class="tab {% if role_filter == 'manager' %}active{% endif %}">Managers</a>
+        <a href="/manage_employees?role=all&search_by={{ search_by or 'name' }}&search={{ search_query or '' }}" class="tab {% if role_filter == 'all' or not role_filter %}active{% endif %}">All</a>
+        <a href="/manage_employees?role=employee&search_by={{ search_by or 'name' }}&search={{ search_query or '' }}" class="tab {% if role_filter == 'employee' %}active{% endif %}">Employees</a>
+        <a href="/manage_employees?role=manager&search_by={{ search_by or 'name' }}&search={{ search_query or '' }}" class="tab {% if role_filter == 'manager' %}active{% endif %}">Managers</a>
     </div>
 
-    <form method="GET" style="margin-bottom: 20px; display: flex; gap: 10px;">
+    <form method="GET" style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
         <input type="hidden" name="role" value="{{ role_filter }}">
-        <input type="text" name="search" value="{{ request.args.get('search', '') }}" placeholder="Search Employee ID or Name" style="flex: 1; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem;">
-        <button type="submit" class="edit-btn" style="border: none; cursor: pointer;">Search</button>
-        {% if request.args.get('search') or role_filter != 'all' %}
+        
+        <select name="search_by" id="search-by" onchange="handleSearchByChange()" style="padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem; background: white; outline: none; cursor: pointer; min-width: 150px;">
+            <option value="name" {% if search_by == 'name' %}selected{% endif %}>Name</option>
+            <option value="employee_id" {% if search_by == 'employee_id' %}selected{% endif %}>Employee ID</option>
+            <option value="department" {% if search_by == 'department' %}selected{% endif %}>Department</option>
+            <option value="role" {% if search_by == 'role' %}selected{% endif %}>Role</option>
+            <option value="status" {% if search_by == 'status' %}selected{% endif %}>Status</option>
+        </select>
+
+        <div style="flex: 1; min-width: 200px;">
+            <!-- Text Search Input -->
+            <input type="text" name="search" id="search-text" value="{% if search_by in ['name', 'employee_id', 'department'] or not search_by %}{{ search_query or '' }}{% endif %}" placeholder="Search term..." style="width: 100%; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem; display: {% if search_by in ['role', 'status'] %}none{% else %}block{% endif %};">
+
+            <!-- Role Select Dropdown -->
+            <select id="search-role" style="width: 100%; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem; background: white; outline: none; cursor: pointer; display: {% if search_by == 'role' %}block{% else %}none{% endif %};">
+                <option value="employee" {% if search_query == 'employee' %}selected{% endif %}>Employee</option>
+                <option value="manager" {% if search_query == 'manager' %}selected{% endif %}>Manager</option>
+                <option value="admin" {% if search_query == 'admin' %}selected{% endif %}>Admin</option>
+            </select>
+
+            <!-- Status Select Dropdown -->
+            <select id="search-status" style="width: 100%; padding: 10px 14px; border: 1px solid #dde3ea; border-radius: 8px; font-size: 0.95rem; background: white; outline: none; cursor: pointer; display: {% if search_by == 'status' %}block{% else %}none{% endif %};">
+                <option value="active" {% if search_query == 'active' %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if search_query == 'inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+        </div>
+
+        <button type="submit" onclick="prepareSearchSubmit(event)" class="edit-btn" style="border: none; cursor: pointer; padding: 10px 20px;">Search</button>
+        {% if search_query or role_filter != 'all' %}
             <a href="/manage_employees?role=all" class="tab" style="line-height: 2.2; text-align: center; display: inline-block;">Clear</a>
         {% endif %}
     </form>
+
+    <script>
+    function handleSearchByChange() {
+        const searchBy = document.getElementById("search-by").value;
+        const textInput = document.getElementById("search-text");
+        const roleSelect = document.getElementById("search-role");
+        const statusSelect = document.getElementById("search-status");
+
+        if (searchBy === "role") {
+            textInput.style.display = "none";
+            roleSelect.style.display = "block";
+            statusSelect.style.display = "none";
+        } else if (searchBy === "status") {
+            textInput.style.display = "none";
+            roleSelect.style.display = "none";
+            statusSelect.style.display = "block";
+        } else {
+            textInput.style.display = "block";
+            roleSelect.style.display = "none";
+            statusSelect.style.display = "none";
+            if (searchBy === "name") {
+                textInput.placeholder = "Enter name...";
+            } else if (searchBy === "employee_id") {
+                textInput.placeholder = "Enter Employee ID...";
+            } else if (searchBy === "department") {
+                textInput.placeholder = "Enter department...";
+            } else {
+                textInput.placeholder = "Search term...";
+            }
+        }
+    }
+
+    function prepareSearchSubmit(event) {
+        const searchBy = document.getElementById("search-by").value;
+        const textInput = document.getElementById("search-text");
+        
+        if (searchBy === "role") {
+            textInput.value = document.getElementById("search-role").value;
+        } else if (searchBy === "status") {
+            textInput.value = document.getElementById("search-status").value;
+        }
+    }
+    
+    // Run once on load to initialize placeholder and display state correctly
+    document.addEventListener("DOMContentLoaded", handleSearchByChange);
+    </script>
 
     {% if users %}
     <div class="table-container">

@@ -300,6 +300,36 @@
 
   <div class="card">
 
+    <h2>📊 My Leave Statistics</h2>
+
+    <div class="balance-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+
+      <div class="balance-card" id="total-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="filterRequestsTable('Total')">
+        <h3>{{ stats.total or 0 }}</h3>
+        <p>Total</p>
+      </div>
+
+      <div class="balance-card" id="pending-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="filterRequestsTable('Pending')">
+        <h3>{{ stats.pending or 0 }}</h3>
+        <p>Pending</p>
+      </div>
+
+      <div class="balance-card" id="approved-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="filterRequestsTable('Approved')">
+        <h3>{{ stats.approved or 0 }}</h3>
+        <p>Approved</p>
+      </div>
+
+      <div class="balance-card" id="rejected-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="filterRequestsTable('Rejected')">
+        <h3>{{ stats.rejected or 0 }}</h3>
+        <p>Rejected</p>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="card">
+
     <h2>📝 Apply For Leave</h2>
 
     <form method="POST" action="/submit_leave">
@@ -405,7 +435,7 @@
 
       {% for r in requests %}
 
-      <tr>
+      <tr class="request-row">
 
         <td><span title="{{ r.id }}" style="cursor: help; font-family: monospace; border-bottom: 1px dashed #ccc;">{{ r.id[:8] }}...</span></td>
         <td>{{ r.leave_type }}</td>
@@ -486,5 +516,36 @@
 ">
     © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
 </div>
+<script>
+function filterRequestsTable(status) {
+    const cards = ['total-card', 'pending-card', 'approved-card', 'rejected-card'];
+    cards.forEach(c => {
+        const card = document.getElementById(c);
+        if (card) {
+            card.style.background = "#f7f9fb";
+            card.style.borderColor = "transparent";
+        }
+    });
+
+    const activeCardId = status.toLowerCase() + '-card';
+    const activeCard = document.getElementById(activeCardId);
+    if (activeCard) {
+        activeCard.style.background = "#eef4fb";
+        activeCard.style.borderColor = "#2e6da4";
+    }
+
+    const rows = document.querySelectorAll(".request-row");
+    rows.forEach(row => {
+        const badge = row.querySelector(".badge");
+        if (!badge) return;
+        const rowStatus = badge.textContent.trim();
+        if (status === 'Total' || rowStatus === status) {
+            row.style.display = "";
+        } else {
+            row.style.display = "none";
+        }
+    });
+}
+</script>
 </body>
 </html>

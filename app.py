@@ -1150,6 +1150,27 @@ def manager_leave():
 
         requests.sort(key=lambda x: x.get("submitted_on") or "", reverse=True)
 
+        total = 0
+        pending = 0
+        approved = 0
+        rejected = 0
+        for r in requests:
+            total += 1
+            status = r.get("status", "Pending")
+            if status == "Pending":
+                pending += 1
+            elif status == "Approved":
+                approved += 1
+            elif status == "Rejected":
+                rejected += 1
+
+        stats = {
+            "total": total,
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected
+        }
+
         today = date.today()
         max_date = (today + timedelta(days=180)).strftime("%Y-%m-%d")
         today = today.strftime("%Y-%m-%d")
@@ -1159,7 +1180,8 @@ def manager_leave():
             requests=requests,
             user=user,
             today=today,
-            max_date=max_date
+            max_date=max_date,
+            stats=stats
         )
     except Exception as e:
         print(f"Manager leave portal error: {e}")
@@ -1260,6 +1282,7 @@ def manage_employees():
 
     try:
         role_filter = request.args.get("role", "all").strip().lower()
+        search_by = request.args.get("search_by", "name").strip().lower()
         search_query = request.args.get("search", "").strip().lower()
 
         users_docs = db_firestore.collection("users").get()
@@ -1272,9 +1295,21 @@ def manage_employees():
         if role_filter != "all":
             users = [u for u in users if u.get("role") == role_filter]
 
-        # Filter by search query
+        # Filter by search query based on chosen criteria
         if search_query:
-            users = [u for u in users if search_query in (u.get("employee_id") or "").lower() or search_query in (u.get("full_name") or "").lower()]
+            if search_by == "employee_id":
+                users = [u for u in users if search_query in (u.get("employee_id") or "").lower()]
+            elif search_by == "department":
+                users = [u for u in users if search_query in (u.get("department") or "").lower()]
+            elif search_by == "role":
+                users = [u for u in users if search_query == (u.get("role") or "").lower()]
+            elif search_by == "status":
+                if search_query == "active":
+                    users = [u for u in users if u.get("is_active", 1) == 1]
+                elif search_query == "inactive":
+                    users = [u for u in users if u.get("is_active", 1) == 0]
+            else:  # default is search by name
+                users = [u for u in users if search_query in (u.get("full_name") or "").lower()]
 
         # Calculate pending leave requests stats for navbar badge
         reqs_docs = db_firestore.collection("leave_requests").get()
@@ -1286,7 +1321,14 @@ def manage_employees():
             "manager_pending": manager_pending
         }
 
-        return render_template("manage_employees.html", users=users, role_filter=role_filter, stats=stats)
+        return render_template(
+            "manage_employees.html", 
+            users=users, 
+            role_filter=role_filter, 
+            stats=stats,
+            search_by=search_by,
+            search_query=search_query
+        )
     except Exception as e:
         print(f"Manage employees error: {e}")
         flash("Could not load employee management.", "error")
