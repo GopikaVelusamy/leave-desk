@@ -17,6 +17,11 @@
   const styleBlock = document.createElement('style');
   styleBlock.id = 'dynamic-theme-style';
   styleBlock.innerHTML = `
+    :root {
+      --primary-color: ${theme.primary};
+      --secondary-color: ${theme.secondary};
+      --gradient: ${theme.gradient};
+    }
     nav { background: ${theme.gradient} !important; }
     .btn, .btn-submit, .login-btn, .signup-btn:hover { background: ${theme.gradient} !important; color: white !important; }
     .left-panel { background: ${theme.gradient} !important; }
@@ -45,122 +50,254 @@
     box-sizing:border-box;
 }
 
-body{
-    font-family:'DM Sans',sans-serif;
-    background:#f0f4f8;
-    min-height:100vh;
-    display:flex;
-    justify-content:center;
-    align-items:center;
+body {
+    font-family: 'DM Sans', sans-serif;
+    background: #f5f8fc;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
 }
 
-.page-wrapper{
-    display:flex;
-    width:860px;
-    min-height:500px;
-    border-radius:20px;
-    overflow:hidden;
-    box-shadow:0 20px 60px rgba(0,0,0,0.15);
+/* Background glowing blobs */
+.bg-blob-1, .bg-blob-2 {
+    position: absolute;
+    width: 450px;
+    height: 450px;
+    border-radius: 50%;
+    filter: blur(140px);
+    z-index: -1;
+    opacity: 0.35;
+    animation: floatBlob 10s ease-in-out infinite alternate;
 }
 
-@media(max-width:768px){
+.bg-blob-1 {
+    top: -100px;
+    left: -100px;
+    background: var(--primary-color, #1a3a5c);
+}
 
-    .page-wrapper{
-        flex-direction:column;
-        width:95%;
-        min-height:auto;
+.bg-blob-2 {
+    bottom: -150px;
+    right: -100px;
+    background: var(--secondary-color, #2e6da4);
+    animation-delay: 2s;
+}
+
+@keyframes floatBlob {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(50px, 30px) scale(1.1); }
+}
+
+.page-wrapper {
+    display: flex;
+    width: 920px;
+    min-height: 540px;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 25px 60px rgba(26, 58, 92, 0.12), 0 5px 20px rgba(0, 0, 0, 0.05);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    transition: transform 0.3s ease;
+}
+
+/* Left Panel */
+.left-panel {
+    background: var(--gradient, linear-gradient(145deg, #1a3a5c, #2e6da4));
+    color: white;
+    width: 45%;
+    padding: 50px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Left panel decorative glass circles */
+.left-circle-1 {
+    position: absolute;
+    top: -50px;
+    right: -50px;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    filter: blur(20px);
+    pointer-events: none;
+}
+
+.left-circle-2 {
+    position: absolute;
+    bottom: -80px;
+    left: -80px;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    filter: blur(30px);
+    pointer-events: none;
+}
+
+.logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.2rem;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 1;
+}
+
+.logo-img {
+    height: 44px;
+    width: 44px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: white;
+    padding: 3px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+.left-panel p {
+    font-size: 0.95rem;
+    opacity: 0.9;
+    line-height: 1.7;
+    margin-bottom: 30px;
+    z-index: 1;
+}
+
+.features-list {
+    z-index: 1;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    font-size: 0.92rem;
+    font-weight: 500;
+    opacity: 0.95;
+    transition: transform 0.2s ease;
+}
+
+.info-item:hover {
+    transform: translateX(5px);
+}
+
+.icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+}
+
+.feat-icon {
+    width: 16px;
+    height: 16px;
+    color: white;
+}
+
+/* Right Panel */
+.right-panel {
+    background: white;
+    flex: 1;
+    padding: 50px 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.welcome-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.6rem;
+    background: var(--gradient, linear-gradient(135deg, #1a3a5c, #2e6da4));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+    font-weight: normal;
+}
+
+.subtitle {
+    color: #64748b;
+    margin-bottom: 40px;
+    font-size: 1.05rem;
+    font-weight: 500;
+}
+
+.btn {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 18px;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: block;
+    text-align: center;
+}
+
+.login-btn {
+    background: var(--gradient, linear-gradient(135deg, #1a3a5c, #2e6da4));
+    color: white;
+    border: none;
+}
+
+.login-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(26, 58, 92, 0.25);
+}
+
+.signup-btn {
+    background: white;
+    color: var(--primary-color, #1a3a5c);
+    border: 2px solid var(--primary-color, #1a3a5c);
+    text-decoration: none;
+}
+
+.signup-btn:hover {
+    background: var(--primary-color, #1a3a5c);
+    color: white !important;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(26, 58, 92, 0.15);
+}
+
+.footer {
+    text-align: center;
+    margin-top: 25px;
+    color: #94a3b8;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+@media(max-width:768px) {
+    .page-wrapper {
+        flex-direction: column;
+        width: 95%;
+        min-height: auto;
     }
-
-    .left-panel,
-    .right-panel{
-        width:100%;
+    .left-panel {
+        width: 100%;
+        padding: 40px 30px;
     }
-
-}
-
-/* LEFT PANEL */
-
-.left-panel{
-    background:linear-gradient(145deg,#1a3a5c,#2e6da4);
-    color:white;
-    width:45%;
-    padding:50px 40px;
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-}
-
-.logo{
-    font-family:'DM Serif Display',serif;
-    font-size:2rem;
-    margin-bottom:12px;
-}
-
-.left-panel p{
-    font-size:0.95rem;
-    opacity:0.85;
-    line-height:1.7;
-    margin-bottom:25px;
-}
-
-.info-item{
-    margin-bottom:14px;
-    font-size:0.92rem;
-}
-
-/* RIGHT PANEL */
-
-.right-panel{
-    background:white;
-    flex:1;
-    padding:50px 40px;
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-}
-
-.right-panel h2{
-    font-family:'DM Serif Display',serif;
-    font-size:1.9rem;
-    color:#1a3a5c;
-    margin-bottom:10px;
-}
-
-.subtitle{
-    color:#777;
-    margin-bottom:35px;
-    line-height:1.6;
-}
-
-.btn{
-    width:100%;
-    padding:14px;
-    border:none;
-    border-radius:10px;
-    font-size:1rem;
-    font-weight:600;
-    cursor:pointer;
-    margin-bottom:15px;
-    transition:0.2s;
-}
-
-.login-btn{
-    background:linear-gradient(135deg,#2e6da4,#1a3a5c);
-    color:white;
-}
-
-.signup-btn{
-    background:#eef4fb;
-    color:#1a3a5c;
-    border:1px solid #d6dde7;
-}
-
-.btn:hover{
-    transform:translateY(-2px);
-}
-
-a{
-    text-decoration:none;
+    .right-panel {
+        width: 100%;
+        padding: 40px 30px;
+    }
 }
 
 </style>
@@ -168,12 +305,18 @@ a{
 
 <body>
 
+<!-- Background glowing blobs -->
+<div class="bg-blob-1"></div>
+<div class="bg-blob-2"></div>
+
 <div class="page-wrapper">
 
     <div class="left-panel">
+        <div class="left-circle-1"></div>
+        <div class="left-circle-2"></div>
 
-        <div class="logo" style="display: flex; align-items: center; gap: 10px;">
-            <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Leave Desk Logo" style="height: 40px; width: 40px; object-fit: contain; border-radius: 6px; background: white; padding: 2px; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Leave Desk Logo" class="logo-img">
             Leave Desk
         </div>
 
@@ -181,45 +324,84 @@ a{
             An intelligent leave management portal that enables employees to submit and track leave requests while providing managers with a seamless approval workflow.
         </p>
         
-        <div class="info-item">👥 Role-Based User Access</div>
-        <div class="info-item">📝 Easy Leave Application</div>
-        <div class="info-item">📊 Real-Time Request Tracking</div>
-        <div class="info-item">✅ Streamlined Approval Workflow</div>
-        <div class="info-item">🔐 Secure Authentication & Password Recovery</div>
+        <div class="features-list">
+            <div class="info-item">
+                <div class="icon-wrapper">
+                    <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" class="feat-icon">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                </div>
+                Role-Based User Access
+            </div>
+            <div class="info-item">
+                <div class="icon-wrapper">
+                    <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" class="feat-icon">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                    </svg>
+                </div>
+                Easy Leave Application
+            </div>
+            <div class="info-item">
+                <div class="icon-wrapper">
+                    <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" class="feat-icon">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </div>
+                Real-Time Request Tracking
+            </div>
+            <div class="info-item">
+                <div class="icon-wrapper">
+                    <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" class="feat-icon">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                </div>
+                Streamlined Approval Workflow
+            </div>
+            <div class="info-item">
+                <div class="icon-wrapper">
+                    <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" class="feat-icon">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                </div>
+                Secure Authentication & Recovery
+            </div>
+        </div>
 
     </div>
 
     <div class="right-panel">
 
-        <h2>Welcome</h2>
+        <h2 class="welcome-title">Welcome</h2>
 
         <p class="subtitle">
             Smart Leave Request & Approval System
         </p>
 
-        <a href="{{ url_for('login') }}">
+        <a href="{{ url_for('login') }}" style="text-decoration: none;">
             <button class="btn login-btn">
                 Login
             </button>
         </a>
 
-        <a href="{{ url_for('signup') }}">
+        <a href="{{ url_for('signup') }}" style="text-decoration: none;">
             <button class="btn signup-btn">
                 Create Account
             </button>
         </a>
 
-        <div style="
-            text-align:center;
-            margin-top:20px;
-            color:#999;
-            font-size:0.8rem;
-        ">
+        <div class="footer">
             © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
         </div>
     </div>
-
-    
 
 </div>
 
