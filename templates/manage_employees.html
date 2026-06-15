@@ -385,9 +385,14 @@ td{
             <td>{{ user.department or "-" }}</td>
 
             <td>
-                <span class="badge {{ user.role }}">
-                    {{ user.role|capitalize }}
-                </span>
+                {% if user.role == 'manager' %}
+                    <span class="badge employee">Employee</span>
+                    <span class="badge manager" style="margin-left: 4px;">Manager</span>
+                {% elif user.role == 'admin' %}
+                    <span class="badge admin">Admin</span>
+                {% else %}
+                    <span class="badge employee">Employee</span>
+                {% endif %}
             </td>
 
             <td>
