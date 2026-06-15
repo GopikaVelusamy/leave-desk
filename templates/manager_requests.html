@@ -425,7 +425,6 @@
 
       <thead>
         <tr>
-          <th>Request ID</th>
           <th>Employee Details</th>
           <th>Leave Type</th>
           <th>From</th>
@@ -444,8 +443,6 @@
 
         {% for r in all_requests %}
         <tr data-status="{{ r.status }}">
-
-          <td><span title="{{ r.id }}" style="cursor: help; font-family: monospace; border-bottom: 1px dashed #ccc;">{{ r.id[:8] }}...</span></td>
 
           <td>
 
