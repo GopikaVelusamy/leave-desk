@@ -304,22 +304,22 @@
 
     <div class="balance-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
 
-      <div class="balance-card" id="total-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="filterRequestsTable('Total')">
+      <div class="balance-card" id="total-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="window.location.href='/my_requests?status=Total'">
         <h3>{{ stats.total or 0 }}</h3>
         <p>Total</p>
       </div>
 
-      <div class="balance-card" id="pending-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="filterRequestsTable('Pending')">
+      <div class="balance-card" id="pending-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="window.location.href='/my_requests?status=Pending'">
         <h3>{{ stats.pending or 0 }}</h3>
         <p>Pending</p>
       </div>
 
-      <div class="balance-card" id="approved-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="filterRequestsTable('Approved')">
+      <div class="balance-card" id="approved-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="window.location.href='/my_requests?status=Approved'">
         <h3>{{ stats.approved or 0 }}</h3>
         <p>Approved</p>
       </div>
 
-      <div class="balance-card" id="rejected-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="filterRequestsTable('Rejected')">
+      <div class="balance-card" id="rejected-card" style="cursor: pointer; border: 2px solid transparent; transition: all 0.2s;" onclick="window.location.href='/my_requests?status=Rejected'">
         <h3>{{ stats.rejected or 0 }}</h3>
         <p>Rejected</p>
       </div>
@@ -516,36 +516,5 @@
 ">
     © 2026 LeaveDesk. All Rights Reserved.<br>Developed by Strategic Knights
 </div>
-<script>
-function filterRequestsTable(status) {
-    const cards = ['total-card', 'pending-card', 'approved-card', 'rejected-card'];
-    cards.forEach(c => {
-        const card = document.getElementById(c);
-        if (card) {
-            card.style.background = "#f7f9fb";
-            card.style.borderColor = "transparent";
-        }
-    });
-
-    const activeCardId = status.toLowerCase() + '-card';
-    const activeCard = document.getElementById(activeCardId);
-    if (activeCard) {
-        activeCard.style.background = "#eef4fb";
-        activeCard.style.borderColor = "#2e6da4";
-    }
-
-    const rows = document.querySelectorAll(".request-row");
-    rows.forEach(row => {
-        const badge = row.querySelector(".badge");
-        if (!badge) return;
-        const rowStatus = badge.textContent.trim();
-        if (status === 'Total' || rowStatus === status) {
-            row.style.display = "";
-        } else {
-            row.style.display = "none";
-        }
-    });
-}
-</script>
 </body>
 </html>
