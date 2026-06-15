@@ -100,6 +100,12 @@ nav{
     box-shadow: 0 6px 18px rgba(0,0,0,0.12);
 }
 
+.stat-card.employees { border-top: 5px solid #3b82f6; }
+.stat-card.managers { border-top: 5px solid #8b5cf6; }
+.stat-card.pending { border-top: 5px solid #f59e0b; }
+.stat-card.approved { border-top: 5px solid #10b981; }
+.stat-card.rejected { border-top: 5px solid #ef4444; }
+
 .stat-card h2{
     font-size:2rem;
     margin-bottom:10px;
@@ -342,37 +348,37 @@ footer{
 
 <div class="stats-grid">
     
-    <div class="stat-card" onclick="window.location.href='/manage_employees?role=employee'">
+    <div class="stat-card employees" onclick="window.location.href='/manage_employees?role=employee'">
         <h2>{{ stats.total_employees }}</h2>
         <p>Total Employees</p>
     </div>
 
-    <div class="stat-card" onclick="window.location.href='/manage_employees?role=manager'">
+    <div class="stat-card managers" onclick="window.location.href='/manage_employees?role=manager'">
         <h2>{{ stats.total_managers }}</h2>
         <p>Total Managers</p>
     </div>
 
-    <div class="stat-card" onclick="window.location.href='/admin_requests?role=employee&status=Pending'">
+    <div class="stat-card pending" onclick="window.location.href='/admin_requests?role=employee&status=Pending'">
         <h2>{{ stats.employee_pending }}</h2>
         <p>Pending Employee Leaves</p>
     </div>
 
-    <div class="stat-card" onclick="window.location.href='/admin_requests?role=employee&status=Approved'">
+    <div class="stat-card approved" onclick="window.location.href='/admin_requests?role=employee&status=Approved'">
         <h2>{{ stats.employee_approved }}</h2>
         <p>Approved Employee Leaves</p>
     </div>
 
-    <div class="stat-card" onclick="window.location.href='/admin_requests?role=manager&status=Pending'">
+    <div class="stat-card pending" onclick="window.location.href='/admin_requests?role=manager&status=Pending'">
         <h2>{{ stats.manager_pending }}</h2>
         <p>Pending Manager Leaves</p>
     </div>
 
-    <div class="stat-card" onclick="window.location.href='/admin_requests?role=manager&status=Approved'">
+    <div class="stat-card approved" onclick="window.location.href='/admin_requests?role=manager&status=Approved'">
         <h2>{{ stats.manager_approved }}</h2>
         <p>Approved Manager Leaves</p>
     </div>
 
-    <div class="stat-card" onclick="window.location.href='/admin_requests?status=Rejected'">
+    <div class="stat-card rejected" onclick="window.location.href='/admin_requests?status=Rejected'">
         <h2>{{ stats.employee_rejected + stats.manager_rejected }}</h2>
         <p>Total Rejected Leaves</p>
     </div>
